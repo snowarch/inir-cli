@@ -17,7 +17,7 @@ export HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state
 unset WAYLAND_DISPLAY NIRI_SOCKET DBUS_SESSION_BUS_ADDRESS
 mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
 
-calls=(--help help version "no-such-target foo")
+calls=(--help help version "no-such-target foo" completions "completions nosuch" "completions install nosuch")
 while IFS= read -r target; do
   calls+=("$target" "$target --help" "$target noSuchFunction")
 done < <(python3 -c 'import json,sys; [print(t["name"]) for t in json.load(open(sys.argv[1]))["targets"]]' \

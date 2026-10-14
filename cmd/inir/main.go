@@ -13,25 +13,21 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/snowarch/inir-cli/internal/cli"
 	"github.com/snowarch/inir-cli/internal/ipc"
 	"github.com/snowarch/inir-cli/internal/shell"
 )
 
-// Commands the bash launcher handles itself before it treats a word as an IPC
-// target (the explicit cases of its dispatch).
-var launcherCommands = map[string]bool{
-	"install": true, "start": true, "stop": true, "run": true, "restart": true, "kill": true,
-	"logs": true, "terminal": true, "browser": true, "close-window": true, "colorpicker": true,
-	"ipc": true, "dev": true, "settings": true, "open": true, "settings-window": true,
-	"waffle-settings-window": true, "welcome": true, "repair": true, "path": true,
-	"test-local": true, "setup": true, "service": true, "cleanup-orphans": true, "doctor": true,
-	"migrate": true, "status": true, "update": true, "reinstall": true, "rollback": true,
-	"my-changes": true, "uninstall": true, "config": true, "info": true, "backup": true,
-	"version": true, "theme": true, "hub": true, "bind": true, "completions": true, "help": true,
-}
-
 func main() {
 	args := os.Args[1:]
+	if len(args) > 0 {
+		switch args[0] {
+		case "__complete":
+			os.Exit(runComplete(args[1:]))
+		case "completions":
+			os.Exit(runCompletions(args[1:]))
+		}
+	}
 	if code, handled := callIPC(args); handled {
 		os.Exit(code)
 	}
@@ -46,7 +42,7 @@ func callIPC(args []string) (int, bool) {
 	if len(args) < 2 || strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[1], "-") {
 		return 0, false
 	}
-	if launcherCommands[args[0]] || (args[0] == "lock" && args[1] == "prepareSleep") {
+	if _, ok := cli.Lookup(args[0]); ok || (args[0] == "lock" && args[1] == "prepareSleep") {
 		return 0, false
 	}
 	dir, ok := runningShell()
