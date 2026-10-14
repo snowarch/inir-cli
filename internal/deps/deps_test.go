@@ -114,6 +114,9 @@ func TestShellTable(t *testing.T) {
 	if path == "" {
 		t.Skip("set INIR_SHELL_REPO (or INIR_DEPS_TABLE)")
 	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Skip("this shell has no sdata/deps.toml yet")
+	}
 	tab, err := Load(path)
 	if err != nil {
 		t.Fatal(err)

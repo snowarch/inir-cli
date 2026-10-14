@@ -83,6 +83,10 @@ var Commands = []Command{
 		help}},
 	{Name: "status", Desc: "Install mode, update strategy and health"},
 	{Name: "doctor", Desc: "Check the install and fix what it can", Flags: withConfig(
+		Flag{Name: "--check", Desc: "Only check, change nothing"},
+		Flag{Name: "--json", Desc: "The report as JSON"},
+		Flag{Name: "--offline", Desc: "Do not fetch the repo's remote"},
+		Flag{Name: "--only", Desc: "Just these steps (--only=5,8)", Value: "STEPS"},
 		Flag{Name: "--perf", Desc: "Snapshot of graphics and media at runtime"},
 		Flag{Name: "--fix-abi", Desc: "Rebuild Quickshell against the installed Qt"},
 		Flag{Name: "--yes", Desc: "Rebuild without asking"})},
@@ -170,6 +174,21 @@ var Commands = []Command{
 	{Name: "cleanup-orphans", Desc: "Kill what an old shell left running", Hidden: true},
 }
 
+// BinaryCommands are words only the inir binary answers; scripts/inir does
+// not dispatch them, so they stay out of Commands.
+var BinaryCommands = []Command{
+	{Name: "deps", Desc: "What an install puts on this machine", Subs: []Sub{
+		{Name: "plan", Desc: "Packages and providers from the shell's deps.toml", Flags: []Flag{
+			{Name: "--distro", Desc: "Plan for another distro", Value: "DISTRO",
+				Values: []string{"arch", "fedora", "debian", "ubuntu", "void"}},
+			{Name: "--no-audio", Desc: "Without the audio group"},
+			{Name: "--no-toolkit", Desc: "Without the toolkit group"},
+			{Name: "--no-screencapture", Desc: "Without the screencapture group"},
+			{Name: "--no-fonts", Desc: "Without the fonts group"},
+			{Name: "--table", Desc: "Another deps.toml", Value: "PATH"},
+			{Name: "--json", Desc: "As JSON"}}}}},
+}
+
 // BindFlags are the options of `inir bind` before the keys.
 var BindFlags = []Flag{
 	{Name: "--add", Desc: "Write the bind into your own block of 90-user-extra.kdl"},
@@ -188,9 +207,26 @@ var byName = func() map[string]*Command {
 	return m
 }()
 
+var binaryByName = func() map[string]*Command {
+	m := make(map[string]*Command, len(BinaryCommands))
+	for i := range BinaryCommands {
+		m[BinaryCommands[i].Name] = &BinaryCommands[i]
+	}
+	return m
+}()
+
 // Lookup finds a launcher command by its word.
 func Lookup(name string) (*Command, bool) {
 	c, ok := byName[name]
+	return c, ok
+}
+
+// LookupAny also finds the binary's own commands.
+func LookupAny(name string) (*Command, bool) {
+	if c, ok := byName[name]; ok {
+		return c, true
+	}
+	c, ok := binaryByName[name]
 	return c, ok
 }
 

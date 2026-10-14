@@ -94,6 +94,9 @@ func TestComplete(t *testing.T) {
 		{line: "bind --add Mod+O ", want: []string{"altSwitcher", "restart"}},
 		{line: "bind Mod+O iris theme ", want: []string{"apply:"}},
 		{line: "nosuch ", want: nil},
+		{line: "doctor -", want: []string{"--check", "--json", "--only"}},
+		{line: "deps ", want: []string{"plan"}},
+		{line: "deps plan --distro ", want: []string{"arch", "void"}},
 	}
 	for _, c := range cases {
 		words := strings.Split(c.line, " ")

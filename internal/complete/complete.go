@@ -63,7 +63,7 @@ func Complete(words []string, reg *ipc.Registry) Result {
 	case "bind":
 		return bind(reg, prev[1:], cur)
 	}
-	cmd, ok := cli.Lookup(prev[0])
+	cmd, ok := cli.LookupAny(prev[0])
 	if !ok {
 		return ipcCall(reg, prev, cur)
 	}
@@ -199,7 +199,7 @@ func ipcCall(reg *ipc.Registry, call []string, cur string) Result {
 
 func commands() []Candidate {
 	var out []Candidate
-	for _, c := range cli.Commands {
+	for _, c := range append(append([]cli.Command{}, cli.Commands...), cli.BinaryCommands...) {
 		if !c.Hidden {
 			out = append(out, Candidate{c.Name, c.Desc, KindCommand})
 		}
