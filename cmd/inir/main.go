@@ -37,6 +37,8 @@ func main() {
 			if code, handled := runDoctor(args[1:]); handled {
 				os.Exit(code)
 			}
+		case "deps":
+			os.Exit(runDeps(args[1:]))
 		}
 	}
 	if code, handled := callIPC(args); handled {

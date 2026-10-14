@@ -15,7 +15,10 @@ It does three things itself and hands every other command to the shell's `script
   repairs through the bash doctor, one failing step at a time (`setup doctor --only=N`), so
   the repairs are the same code as before.
 
-Install, update and the helpers move here next.
+It also plans installs: `inir deps plan [--distro D] [--no-audio ...] [--json]` reads the
+shell's `sdata/deps.toml` (what iNiR installs per distro and install group) and prints the
+packages, AUR packages and providers a full install would use. Running that plan, and the
+rest of install and update, moves here next.
 
 ## Where it sits
 
