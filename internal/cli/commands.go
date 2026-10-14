@@ -177,6 +177,8 @@ var Commands = []Command{
 // BinaryCommands are words only the inir binary answers; scripts/inir does
 // not dispatch them, so they stay out of Commands.
 var BinaryCommands = []Command{
+	{Name: "cli", Desc: "The inir binary itself", Subs: []Sub{
+		{Name: "version", Desc: "Version of the binary (not of the shell)"}}},
 	{Name: "deps", Desc: "What an install puts on this machine", Subs: []Sub{
 		{Name: "plan", Desc: "Packages and providers from the shell's deps.toml", Flags: []Flag{
 			{Name: "--distro", Desc: "Plan for another distro", Value: "DISTRO",

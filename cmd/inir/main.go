@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/snowarch/inir-cli/internal/buildinfo"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +40,13 @@ func main() {
 			}
 		case "deps":
 			os.Exit(runDeps(args[1:]))
+		case "cli":
+			if len(args) == 2 && args[1] == "version" {
+				fmt.Println("inir-cli", buildinfo.String())
+				os.Exit(0)
+			}
+			fmt.Fprintln(os.Stderr, "usage: inir cli version")
+			os.Exit(2)
 		}
 	}
 	if code, handled := callIPC(args); handled {
