@@ -33,6 +33,10 @@ func main() {
 			os.Exit(runComplete(args[1:]))
 		case "completions":
 			os.Exit(runCompletions(args[1:]))
+		case "doctor":
+			if code, handled := runDoctor(args[1:]); handled {
+				os.Exit(code)
+			}
 		}
 	}
 	if code, handled := callIPC(args); handled {
