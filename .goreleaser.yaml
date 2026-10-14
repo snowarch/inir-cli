@@ -1,0 +1,43 @@
+# Release: push a tag vX.Y.Z. Binaries, sha256 checksums and deb/rpm land in the GitHub release;
+# the shell's setup fetches the binary for its arch and checks it against checksums.txt (ADR-0006).
+version: 2
+project_name: inir
+
+builds:
+  - id: inir
+    main: ./cmd/inir
+    binary: inir
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/snowarch/inir-cli/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/snowarch/inir-cli/internal/buildinfo.Commit={{ .ShortCommit }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# Packages put the binary where the bash launcher looks for a system copy.
+nfpms:
+  - id: packages
+    package_name: inir-cli
+    vendor: snowarch
+    homepage: https://github.com/snowarch/inir-cli
+    maintainer: snowarch
+    description: Command line for the iNiR desktop shell
+    license: GPL-3.0-or-later
+    formats: [deb, rpm]
+    bindir: /usr/lib/inir
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^test", "^ci"]
