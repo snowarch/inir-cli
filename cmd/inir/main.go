@@ -20,6 +20,13 @@ import (
 
 func main() {
 	args := os.Args[1:]
+	// Whatever goes wrong in here, the bash launcher still answers.
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(os.Stderr, "inir:", r)
+			delegate(args)
+		}
+	}()
 	if len(args) > 0 {
 		switch args[0] {
 		case "__complete":
@@ -100,12 +107,20 @@ func delegate(args []string) {
 		os.Exit(1)
 	}
 	argv := append([]string{launcher}, args...)
-	if err := syscall.Exec(launcher, argv, os.Environ()); err != nil {
+	if err := syscall.Exec(launcher, argv, delegatedEnv()); err != nil {
 		fmt.Fprintln(os.Stderr, "inir:", err)
 		os.Exit(1)
 	}
 }
 
+// delegatedEnv tells scripts/inir (and setup) that the binary already had its
+// turn, so they do not hand the command back.
+func delegatedEnv() []string {
+	return append(os.Environ(), "INIR_CLI_DELEGATED=1")
+}
+
+// bashLauncher is the scripts/inir that execed this binary (INIR_BASH_LAUNCHER),
+// or the installed shell's.
 func bashLauncher() (string, error) {
 	if l := os.Getenv("INIR_BASH_LAUNCHER"); l != "" {
 		return l, nil

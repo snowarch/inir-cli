@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Same output and exit code as the bash launcher, for every IPC target.
+# Same output and exit code as the bash launcher, for every IPC target, also
+# when the launcher hands over to the binary.
 #   test/parity.sh <inir shell checkout> <inir binary>
 # Runs with a throwaway HOME and runtime dir, so no shell is running and
 # nothing reaches the real session. Only calls that never start the shell.
@@ -27,13 +28,21 @@ while IFS= read -r alias; do
 done < <(python3 -c 'import json,sys; [print(a) for a in json.load(open(sys.argv[1]))["aliases"]]' \
            "$shell_repo/scripts/lib/ipc.json")
 
+# Each call three ways: the bash launcher alone, the binary, and the bash
+# launcher with the binary installed (it hands over, the binary hands back).
 failures=0
 for call in "${calls[@]}"; do
   read -r -a argv <<<"$call"
   set +e
-  expected="$("$bash_inir" "${argv[@]}" 2>&1)"; expected_rc=$?
+  expected="$(INIR_NO_CLI=1 "$bash_inir" "${argv[@]}" 2>&1)"; expected_rc=$?
   actual="$("$go_inir" "${argv[@]}" 2>&1)"; actual_rc=$?
+  front="$(INIR_CLI="$go_inir" "$bash_inir" "${argv[@]}" 2>&1)"; front_rc=$?
   set -e
+  if [[ "$front" != "$actual" || $front_rc != "$actual_rc" ]]; then
+    printf 'DIFF through scripts/inir: inir %s (binary rc=%s, front door rc=%s)\n' "$call" "$actual_rc" "$front_rc"
+    diff <(printf '%s\n' "$actual") <(printf '%s\n' "$front") | head -6
+    failures=$((failures + 1))
+  fi
   if [[ "$expected" != "$actual" || $expected_rc != "$actual_rc" ]]; then
     printf 'DIFF: inir %s (bash rc=%s, go rc=%s)\n' "$call" "$expected_rc" "$actual_rc"
     diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | head -6
