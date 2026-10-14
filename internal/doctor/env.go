@@ -40,6 +40,11 @@ func NewEnv() *Env {
 	e.CacheHome = e.envOr("XDG_CACHE_HOME", filepath.Join(e.Home, ".cache"))
 	e.DataHome = e.envOr("XDG_DATA_HOME", filepath.Join(e.Home, ".local", "share"))
 	e.BinHome = e.envOr("XDG_BIN_HOME", filepath.Join(e.Home, ".local", "bin"))
+	// setup appends XDG_BIN_HOME to its PATH (sdata/lib/environment-variables.sh):
+	// what it put there (uv, starship, the launcher) counts before the next login.
+	if path := os.Getenv("PATH"); !strings.Contains(":"+path+":", ":"+e.BinHome+":") {
+		os.Setenv("PATH", path+":"+e.BinHome)
+	}
 	e.RuntimeHome = e.envOr("XDG_RUNTIME_DIR", "/run/user/"+strconv.Itoa(os.Getuid()))
 	e.ConfDir = e.envOr("DOTS_CORE_CONFDIR", e.configDir())
 	e.RuntimeDir = e.runtimeShellDir()
