@@ -142,6 +142,12 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 		fmt.Fprintln(os.Stderr, "inir deps:", err)
 		return 1
 	}
+	if !dryRun {
+		fmt.Println("==> package index")
+		if err := m.Refresh(yes); err != nil {
+			fmt.Fprintln(os.Stderr, "inir deps: package index:", err)
+		}
+	}
 	s := m.Resolve(p, providers)
 	fmt.Printf("==> packages: %d to install", len(s.Install))
 	if len(s.Unavailable) > 0 {
@@ -162,6 +168,12 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 	if err := m.InstallPackages(s, yes); err != nil {
 		fmt.Fprintln(os.Stderr, "inir deps: packages:", err)
 		code = 1
+	}
+	if len(s.AUR) > 0 && !m.HasAURHelper() && providers["aur-helper"] {
+		fmt.Println("==> provider aur-helper")
+		if err := setup("provider", "aur-helper").Run(); err != nil {
+			fmt.Fprintln(os.Stderr, "inir deps: provider aur-helper:", err)
+		}
 	}
 	if err := m.InstallAUR(s, yes); err != nil {
 		fmt.Fprintln(os.Stderr, "inir deps:", err)

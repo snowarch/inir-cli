@@ -42,6 +42,9 @@ type Manager struct {
 	installed func(pkg string) bool
 	available func(pkg string) bool
 	install   func(pkgs []string, yes bool) error
+	// refresh brings the package index up to date before anything is resolved. On Arch that is the full
+	// upgrade setup install does too: a refresh without it is a partial upgrade.
+	refresh func(yes bool) error
 }
 
 // ManagerFor returns the package manager of a distro from deps.Distros.
@@ -52,6 +55,9 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 	case "arch":
 		m.installed = func(p string) bool { return ok("pacman", "-T", p) }
 		m.available = func(p string) bool { return ok("pacman", "-Si", p) || ok("pacman", "-Sg", p) }
+		m.refresh = func(yes bool) error {
+			return sys.Run("sudo", yesFlag([]string{"pacman", "-Syu"}, yes, "--noconfirm")...)
+		}
 		m.install = func(pkgs []string, yes bool) error {
 			args := []string{"pacman", "-S", "--needed"}
 			if yes {
@@ -65,6 +71,7 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 			out, code := sys.Query("dnf", "-q", "repoquery", "--whatprovides", p)
 			return code == 0 && strings.TrimSpace(out) != ""
 		}
+		m.refresh = func(bool) error { return sys.Run("sudo", "dnf", "makecache") }
 		m.install = func(pkgs []string, yes bool) error {
 			args := []string{"dnf", "install"}
 			if yes {
@@ -86,6 +93,7 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 			}
 			return false
 		}
+		m.refresh = func(bool) error { return sys.Run("sudo", "apt-get", "update") }
 		m.install = func(pkgs []string, yes bool) error {
 			args := []string{"apt-get", "install"}
 			if yes {
@@ -96,6 +104,7 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 	case "void":
 		m.installed = func(p string) bool { return ok("xbps-query", p) }
 		m.available = func(p string) bool { return ok("xbps-query", "-R", p) }
+		m.refresh = func(yes bool) error { return sys.Run("sudo", yesFlag([]string{"xbps-install", "-S"}, yes, "-y")...) }
 		m.install = func(pkgs []string, yes bool) error {
 			args := []string{"xbps-install"}
 			if yes {
@@ -107,6 +116,26 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 		return nil, fmt.Errorf("no package manager for %q", distro)
 	}
 	return m, nil
+}
+
+// Refresh updates the package index (Arch: a full upgrade).
+func (m *Manager) Refresh(yes bool) error { return m.refresh(yes) }
+
+func yesFlag(args []string, yes bool, flag string) []string {
+	if yes {
+		return append(args, flag)
+	}
+	return args
+}
+
+// HasAURHelper says whether paru or yay is there.
+func (m *Manager) HasAURHelper() bool {
+	for _, helper := range []string{"paru", "yay"} {
+		if _, code := m.sys.Query("sh", "-c", "command -v "+helper); code == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Steps is what an install of a plan does on this machine, worked out before anything runs.
