@@ -188,7 +188,14 @@ var BinaryCommands = []Command{
 			{Name: "--no-screencapture", Desc: "Without the screencapture group"},
 			{Name: "--no-fonts", Desc: "Without the fonts group"},
 			{Name: "--table", Desc: "Another deps.toml", Value: "PATH"},
-			{Name: "--json", Desc: "As JSON"}}}}},
+			{Name: "--json", Desc: "As JSON"}}},
+		{Name: "install", Desc: "Install what the plan says is missing", Flags: []Flag{
+			{Name: "-y", Desc: "Don't ask"},
+			{Name: "--dry-run", Desc: "Show the steps, change nothing"},
+			{Name: "--no-audio", Desc: "Without the audio group"},
+			{Name: "--no-toolkit", Desc: "Without the toolkit group"},
+			{Name: "--no-screencapture", Desc: "Without the screencapture group"},
+			{Name: "--no-fonts", Desc: "Without the fonts group"}}}}},
 }
 
 // BindFlags are the options of `inir bind` before the keys.
