@@ -40,8 +40,11 @@ func RealSystem() System {
 type Manager struct {
 	sys       System
 	installed func(pkg string) bool
-	available func(pkg string) bool
-	install   func(pkgs []string, yes bool) error
+	// installedAll answers installed for many packages in one query; nil when the distro asks one by one.
+	// ok is false when the query itself failed.
+	installedAll func(pkgs []string) (set map[string]bool, ok bool)
+	available    func(pkg string) bool
+	install      func(pkgs []string, yes bool) error
 	// refresh brings the package index up to date before anything is resolved. On Arch that is the full
 	// upgrade setup install does too: a refresh without it is a partial upgrade.
 	refresh func(yes bool) error
@@ -54,6 +57,21 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 	switch distro {
 	case "arch":
 		m.installed = func(p string) bool { return ok("pacman", "-T", p) }
+		// pacman -T prints the arguments that are not satisfied and exits 127 when there are any.
+		m.installedAll = func(pkgs []string) (map[string]bool, bool) {
+			out, code := sys.Query("pacman", append([]string{"-T"}, pkgs...)...)
+			if code != 0 && code != 127 {
+				return nil, false
+			}
+			set := map[string]bool{}
+			for _, p := range pkgs {
+				set[p] = true
+			}
+			for _, p := range strings.Fields(out) {
+				set[p] = false
+			}
+			return set, true
+		}
 		m.available = func(p string) bool { return ok("pacman", "-Si", p) || ok("pacman", "-Sg", p) }
 		m.refresh = func(yes bool) error {
 			return sys.Run("sudo", yesFlag([]string{"pacman", "-Syu"}, yes, "--noconfirm")...)
@@ -83,6 +101,20 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 		m.installed = func(p string) bool {
 			out, code := sys.Query("dpkg-query", "-W", "-f=${db:Status-Abbrev}", p)
 			return code == 0 && strings.HasPrefix(out, "ii")
+		}
+		// dpkg-query prints a line for each known package and exits 1 when some are unknown.
+		m.installedAll = func(pkgs []string) (map[string]bool, bool) {
+			out, code := sys.Query("dpkg-query", append([]string{"-W", "-f=${Package}\t${db:Status-Abbrev}\n"}, pkgs...)...)
+			if code != 0 && code != 1 {
+				return nil, false
+			}
+			set := map[string]bool{}
+			for _, line := range strings.Split(out, "\n") {
+				if name, status, found := strings.Cut(line, "\t"); found && strings.HasPrefix(status, "ii") {
+					set[name] = true
+				}
+			}
+			return set, true
 		}
 		m.available = func(p string) bool {
 			out, _ := sys.Query("apt-cache", "policy", p)
@@ -150,13 +182,25 @@ type Steps struct {
 // apart what the repositories do not have. Recipes not in providers (this distro's list) are skipped.
 func (m *Manager) Resolve(p *Plan, providers map[string]bool) Steps {
 	var s Steps
+	installed := m.installed
+	if m.installedAll != nil {
+		all := append(append([]string{}, p.Packages...), p.AUR...)
+		for _, alts := range p.First {
+			for _, alt := range alts {
+				all = append(all, strings.Split(alt, "+")...)
+			}
+		}
+		if set, ok := m.installedAll(all); ok {
+			installed = func(pkg string) bool { return set[pkg] }
+		}
+	}
 	want := append([]string{}, p.Packages...)
 	for _, alts := range p.First {
 		for _, alt := range alts {
 			parts := strings.Split(alt, "+")
 			all := true
 			for _, part := range parts {
-				all = all && (m.installed(part) || m.available(part))
+				all = all && (installed(part) || m.available(part))
 			}
 			if all {
 				want = append(want, parts...)
@@ -171,7 +215,7 @@ func (m *Manager) Resolve(p *Plan, providers map[string]bool) Steps {
 		}
 		seen[pkg] = true
 		switch {
-		case m.installed(pkg):
+		case installed(pkg):
 		case m.available(pkg):
 			s.Install = append(s.Install, pkg)
 		default:
@@ -179,7 +223,7 @@ func (m *Manager) Resolve(p *Plan, providers map[string]bool) Steps {
 		}
 	}
 	for _, pkg := range p.AUR {
-		if !m.installed(pkg) {
+		if !installed(pkg) {
 			s.AUR = append(s.AUR, pkg)
 		}
 	}

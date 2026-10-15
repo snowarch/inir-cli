@@ -12,6 +12,17 @@ func fake(installed, available map[string]bool, ran *[]string) System {
 			p := args[len(args)-1]
 			switch name {
 			case "dpkg-query":
+				if len(args) > 3 {
+					out, code := "", 0
+					for _, q := range args[2:] {
+						if installed[q] {
+							out += q + "\tii \n"
+						} else {
+							code = 1
+						}
+					}
+					return out, code
+				}
 				if installed[p] {
 					return "ii ", 0
 				}
@@ -60,5 +71,30 @@ func TestResolveAndInstall(t *testing.T) {
 func TestUnknownDistro(t *testing.T) {
 	if _, err := ManagerFor("gentoo", System{}); err == nil {
 		t.Error("gentoo has no manager yet; want an error")
+	}
+}
+
+func TestArchInstalledInOneQuery(t *testing.T) {
+	queries := 0
+	sys := System{
+		Query: func(name string, args ...string) (string, int) {
+			queries++
+			if name == "pacman" && args[0] == "-T" && len(args) > 2 {
+				return "fish\n", 127
+			}
+			if name == "pacman" && args[0] == "-Si" {
+				return "", 0
+			}
+			return "", 1
+		},
+		Run: func(string, ...string) error { return nil },
+	}
+	m, _ := ManagerFor("arch", sys)
+	s := m.Resolve(&Plan{Distro: "arch", Packages: []string{"jq", "fish"}, AUR: []string{"darkly-bin"}}, nil)
+	if got := strings.Join(s.Install, " "); got != "fish" || len(s.AUR) != 0 {
+		t.Errorf("install = %q, aur = %q", got, s.AUR)
+	}
+	if queries != 2 {
+		t.Errorf("%d queries, want one for what is installed and one for fish in the repos", queries)
 	}
 }
