@@ -33,6 +33,9 @@ func runDeps(args []string) int {
 	for i := 0; i < len(rest); i++ {
 		a := rest[i]
 		switch {
+		case a == "-h" || a == "--help":
+			fmt.Println(depsUsage)
+			return 0
 		case a == "--json":
 			asJSON = true
 		case install && (a == "-y" || a == "--yes"):
@@ -129,6 +132,17 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 			providers[name] = true
 		}
 	}
+	m, err := deps.ManagerFor(p.Distro, deps.RealSystem())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "inir deps:", err)
+		return 1
+	}
+	// What is installed is known without the network: when nothing is missing, sources and the index
+	// stay as they are (on Arch the refresh is a full system upgrade).
+	if s := m.Resolve(p, providers); len(s.Install)+len(s.Unavailable)+len(s.AUR)+len(s.Providers) == 0 {
+		fmt.Println("==> everything is installed")
+		return 0
+	}
 	if providers["repos"] {
 		fmt.Println("==> package sources")
 		if !dryRun {
@@ -136,11 +150,6 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 				fmt.Fprintln(os.Stderr, "inir deps: package sources:", err)
 			}
 		}
-	}
-	m, err := deps.ManagerFor(p.Distro, deps.RealSystem())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir deps:", err)
-		return 1
 	}
 	if !dryRun {
 		fmt.Println("==> package index")
