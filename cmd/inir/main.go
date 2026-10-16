@@ -106,11 +106,51 @@ func runningShell() (string, bool) {
 	return "", false
 }
 
+// quickshell is the executable of the running inir shell (Quickshell or qs-rs), so calls
+// reach it with its own runtime; with no shell running, the installed qs.
 func quickshell() (string, error) {
+	if exe, ok := runningShellExe(); ok {
+		return exe, nil
+	}
 	if _, err := os.Stat("/usr/bin/qs"); err == nil {
 		return "/usr/bin/qs", nil
 	}
 	return exec.LookPath("qs")
+}
+
+// runningShellExe finds a live instance of the inir shell in Quickshell's runtime dir
+// (by-pid links whose instance is under by-shell/inir) and returns its executable.
+func runningShellExe() (string, bool) {
+	run := os.Getenv("XDG_RUNTIME_DIR")
+	if run == "" {
+		run = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	run = filepath.Join(run, "quickshell")
+	links, _ := filepath.Glob(filepath.Join(run, "by-pid", "*"))
+	for _, link := range links {
+		target, err := os.Readlink(link)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(run, "by-shell", "inir", filepath.Base(target))); err != nil {
+			continue
+		}
+		pid := filepath.Base(link)
+		comm, err := os.ReadFile(filepath.Join("/proc", pid, "comm"))
+		if err != nil || strings.TrimSpace(string(comm)) != "qs" {
+			continue
+		}
+		exe, err := os.Readlink(filepath.Join("/proc", pid, "exe"))
+		if err != nil {
+			continue
+		}
+		// A binary replaced on disk while running: the new one at that path.
+		exe = strings.TrimSuffix(exe, " (deleted)")
+		if st, err := os.Stat(exe); err == nil && st.Mode()&0o111 != 0 {
+			return exe, true
+		}
+	}
+	return "", false
 }
 
 // delegate replaces this process with the shell's bash launcher.
