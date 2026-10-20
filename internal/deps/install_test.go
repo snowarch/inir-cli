@@ -80,21 +80,34 @@ func TestArchInstalledInOneQuery(t *testing.T) {
 		Query: func(name string, args ...string) (string, int) {
 			queries++
 			if name == "pacman" && args[0] == "-T" && len(args) > 2 {
-				return "fish\n", 127
+				return "fish\nfoot\nnope\nfonts\n", 127
 			}
-			if name == "pacman" && args[0] == "-Si" {
-				return "", 0
+			if name == "pacman" && args[0] == "-Sl" {
+				return "extra fish 4.0-1\nextra foot 1.2-1 [installed: 1.1-1]\ncore jq 1.7-1\n", 0
+			}
+			if name == "pacman" && args[0] == "-Sg" {
+				return "fonts noto-fonts\nfonts ttf-dejavu\n", 0
 			}
 			return "", 1
 		},
 		Run: func(string, ...string) error { return nil },
 	}
 	m, _ := ManagerFor("arch", sys)
-	s := m.Resolve(&Plan{Distro: "arch", Packages: []string{"jq", "fish"}, AUR: []string{"darkly-bin"}}, nil)
-	if got := strings.Join(s.Install, " "); got != "fish" || len(s.AUR) != 0 {
+	s := m.Resolve(&Plan{Distro: "arch", Packages: []string{"jq", "fish", "foot", "nope", "fonts"}, AUR: []string{"darkly-bin"}}, nil)
+	if got := strings.Join(s.Install, " "); got != "fish foot fonts" || len(s.AUR) != 0 {
 		t.Errorf("install = %q, aur = %q", got, s.AUR)
 	}
-	if queries != 2 {
-		t.Errorf("%d queries, want one for what is installed and one for fish in the repos", queries)
+	if got := strings.Join(s.Unavailable, " "); got != "nope" {
+		t.Errorf("unavailable = %q", got)
+	}
+	if queries != 3 {
+		t.Errorf("%d queries, want one for what is installed, one for the repos and one for groups", queries)
+	}
+	queries = 0
+	sys.Query = func(name string, args ...string) (string, int) { queries++; return "", 0 }
+	m, _ = ManagerFor("arch", sys)
+	m.Resolve(&Plan{Distro: "arch", Packages: []string{"jq"}}, nil)
+	if queries != 1 {
+		t.Errorf("all installed: %d queries, want just the one for what is installed", queries)
 	}
 }

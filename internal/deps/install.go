@@ -44,6 +44,8 @@ type Manager struct {
 	// ok is false when the query itself failed.
 	installedAll func(pkgs []string) (set map[string]bool, ok bool)
 	available    func(pkg string) bool
+	// availableAll lists what the repositories offer in one go; nil when the distro asks one by one.
+	availableAll func() (set map[string]bool, ok bool)
 	install      func(pkgs []string, yes bool) error
 	// refresh brings the package index up to date before anything is resolved. On Arch that is the full
 	// upgrade setup install does too: a refresh without it is a partial upgrade.
@@ -73,6 +75,27 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 			return set, true
 		}
 		m.available = func(p string) bool { return ok("pacman", "-Si", p) || ok("pacman", "-Sg", p) }
+		// Every sync package ("repo name version") and every group ("group package"): two queries
+		// instead of one per missing package, which on a fresh system was 0.2 s each, a hundred times.
+		m.availableAll = func() (map[string]bool, bool) {
+			pkgs, code := sys.Query("pacman", "-Sl")
+			if code != 0 {
+				return nil, false
+			}
+			set := map[string]bool{}
+			for _, line := range strings.Split(pkgs, "\n") {
+				if f := strings.Fields(line); len(f) >= 2 {
+					set[f[1]] = true
+				}
+			}
+			groups, _ := sys.Query("pacman", "-Sg")
+			for _, line := range strings.Split(groups, "\n") {
+				if f := strings.Fields(line); len(f) >= 1 {
+					set[f[0]] = true
+				}
+			}
+			return set, true
+		}
 		m.refresh = func(yes bool) error {
 			return sys.Run("sudo", yesFlag([]string{"pacman", "-Syu"}, yes, "--noconfirm")...)
 		}
@@ -194,13 +217,28 @@ func (m *Manager) Resolve(p *Plan, providers map[string]bool) Steps {
 			installed = func(pkg string) bool { return set[pkg] }
 		}
 	}
+	available := m.available
+	if m.availableAll != nil {
+		var set map[string]bool
+		asked := false
+		available = func(pkg string) bool {
+			if !asked { // only when something is missing
+				asked = true
+				set, _ = m.availableAll()
+			}
+			if set == nil {
+				return m.available(pkg)
+			}
+			return set[pkg]
+		}
+	}
 	want := append([]string{}, p.Packages...)
 	for _, alts := range p.First {
 		for _, alt := range alts {
 			parts := strings.Split(alt, "+")
 			all := true
 			for _, part := range parts {
-				all = all && (installed(part) || m.available(part))
+				all = all && (installed(part) || available(part))
 			}
 			if all {
 				want = append(want, parts...)
@@ -216,7 +254,7 @@ func (m *Manager) Resolve(p *Plan, providers map[string]bool) Steps {
 		seen[pkg] = true
 		switch {
 		case installed(pkg):
-		case m.available(pkg):
+		case available(pkg):
 			s.Install = append(s.Install, pkg)
 		default:
 			s.Unavailable = append(s.Unavailable, pkg)
