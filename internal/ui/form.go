@@ -54,3 +54,15 @@ func FormTheme(t Theme) huh.Theme {
 		return s
 	})
 }
+
+// FormKeys is Huh's keymap with Tab in the help line too: it already moves
+// forward everywhere, the footer just never said so.
+func FormKeys() *huh.KeyMap {
+	k := huh.NewDefaultKeyMap()
+	k.Input.Next.SetHelp("tab/enter", "next")
+	k.Select.Next.SetHelp("tab/enter", "select")
+	k.MultiSelect.Next.SetHelp("tab/enter", "next")
+	k.Note.Next.SetHelp("tab/enter", "next")
+	k.Confirm.Next.SetHelp("tab/enter", "next")
+	return k
+}

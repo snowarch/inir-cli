@@ -39,7 +39,7 @@ func Authenticate(t ui.Theme, accessible bool) error {
 				}
 				return nil
 			}),
-	)).WithTheme(ui.FormTheme(t)).WithWidth(min(ui.Width()-4, 88)).WithAccessible(accessible).Run()
+	)).WithTheme(ui.FormTheme(t)).WithKeyMap(ui.FormKeys()).WithWidth(min(ui.Width()-4, 88)).WithAccessible(accessible).Run()
 	pw = ""
 	if errors.Is(err, huh.ErrUserAborted) {
 		return ErrCancelled

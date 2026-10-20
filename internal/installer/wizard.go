@@ -70,7 +70,7 @@ func Ask(t ui.Theme, s System, pk Packages, backupDir string, accessible bool, a
 	}
 	run := func(groups ...*huh.Group) error {
 		err := huh.NewForm(groups...).
-			WithTheme(ui.FormTheme(t)).
+			WithTheme(ui.FormTheme(t)).WithKeyMap(ui.FormKeys()).
 			WithWidth(min(ui.Width()-4, 88)).
 			WithAccessible(accessible).
 			Run()
