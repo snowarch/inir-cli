@@ -36,7 +36,7 @@ func Main(args []string) int {
 	env := doctor.NewEnv()
 	setupDir := SetupDir(env)
 	if setupDir == "" {
-		fmt.Fprintln(os.Stderr, "inir install: run it from an iNiR checkout (./setup install)")
+		ui.Log("inir install").Error("run it from an iNiR checkout (./setup install)")
 		return 1
 	}
 	accessible := os.Getenv("ACCESSIBLE") != ""
@@ -54,7 +54,7 @@ func Main(args []string) int {
 		return 1
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir install:", err)
+		ui.Log("inir install").Error(err)
 		return 1
 	}
 	if err := Authenticate(t, accessible); err != nil {
@@ -62,7 +62,7 @@ func Main(args []string) int {
 			ui.Card(os.Stdout, t.Muted, "Nothing changed. Run inir install whenever you are ready.")
 			return 1
 		}
-		fmt.Fprintln(os.Stderr, "inir install:", err)
+		ui.Log("inir install").Error(err)
 		return 1
 	}
 	stopSudo := make(chan struct{})
@@ -81,12 +81,12 @@ func Main(args []string) int {
 	p = tea.NewProgram(model)
 	run, err = Start(setupDir, "install", flags, answers, false, func(m any) { p.Send(m) })
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir install:", err)
+		ui.Log("inir install").Error(err)
 		return 1
 	}
 	if _, err := p.Run(); err != nil {
 		run.Stop()
-		fmt.Fprintln(os.Stderr, "inir install:", err)
+		ui.Log("inir install").Error(err)
 		return 1
 	}
 	return Summary(t, model, run.Log)

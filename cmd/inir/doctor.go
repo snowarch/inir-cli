@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/snowarch/inir-cli/internal/doctor"
+	"github.com/snowarch/inir-cli/internal/ui"
 )
 
 // runDoctor is `inir doctor [--check] [--json] [-y] [--only=N,M]`. It checks
@@ -30,7 +31,7 @@ func runDoctor(args []string) (int, bool) {
 			for _, f := range strings.Split(strings.TrimPrefix(a, "--only="), ",") {
 				n, err := strconv.Atoi(f)
 				if err != nil || n < 1 || n > len(doctor.Steps) {
-					fmt.Fprintf(os.Stderr, "inir doctor: no step %q (1-%d)\n", f, len(doctor.Steps))
+					ui.Log("inir doctor").Error("no such step", "step", f, "steps", fmt.Sprintf("1-%d", len(doctor.Steps)))
 					return 2, true
 				}
 				opt.Only = append(opt.Only, n)

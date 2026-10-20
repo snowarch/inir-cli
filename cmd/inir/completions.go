@@ -8,6 +8,7 @@ import (
 	"github.com/snowarch/inir-cli/internal/complete"
 	"github.com/snowarch/inir-cli/internal/ipc"
 	"github.com/snowarch/inir-cli/internal/shell"
+	"github.com/snowarch/inir-cli/internal/ui"
 )
 
 // runComplete answers the completion scripts: `inir __complete SHELL -- WORD...`,
@@ -62,7 +63,7 @@ func runCompletions(args []string) int {
 			return 1
 		}
 		if err := complete.Install(sh, os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, "inir:", err)
+			ui.Log("inir completions").Error(err)
 			return 1
 		}
 		return 0

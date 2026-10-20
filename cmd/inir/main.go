@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/snowarch/inir-cli/internal/buildinfo"
+	"github.com/snowarch/inir-cli/internal/ui"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +26,7 @@ func main() {
 	// Whatever goes wrong in here, the bash launcher still answers.
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, "inir:", r)
+			ui.Log("inir").Error("crashed, the bash launcher takes over", "err", r)
 			delegate(args)
 		}
 	}()
@@ -182,12 +183,12 @@ func runningShellExe() (string, bool) {
 func delegate(args []string) {
 	launcher, err := bashLauncher()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir:", err)
+		ui.Log("inir").Error(err)
 		os.Exit(1)
 	}
 	argv := append([]string{launcher}, args...)
 	if err := syscall.Exec(launcher, argv, delegatedEnv()); err != nil {
-		fmt.Fprintln(os.Stderr, "inir:", err)
+		ui.Log("inir").Error(err)
 		os.Exit(1)
 	}
 }

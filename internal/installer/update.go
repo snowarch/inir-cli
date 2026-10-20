@@ -29,7 +29,7 @@ func Update(args []string) int {
 	t := ui.Current()
 	setupDir := SetupDir(doctor.NewEnv())
 	if setupDir == "" {
-		fmt.Fprintln(os.Stderr, "inir update: no iNiR checkout found (looked at INIR_SETUP_DIR, here and the installed one)")
+		ui.Log("inir update").Error("no iNiR checkout found", "looked", "INIR_SETUP_DIR, here, the installed one")
 		return 1
 	}
 	simulate := slices.Contains(args, "--simulate") || slices.Contains(args, "--dry-run")
@@ -75,7 +75,7 @@ func Update(args []string) int {
 				return 1
 			}
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "inir update:", err)
+				ui.Log("inir update").Error(err)
 				return 1
 			}
 		}
@@ -91,12 +91,12 @@ func Update(args []string) int {
 	detach := exec.Command("sudo", "-n", "true").Run() != nil
 	run, err := Start(setupDir, "update", args, nil, detach, func(m any) { p.Send(m) })
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir update:", err)
+		ui.Log("inir update").Error(err)
 		return 1
 	}
 	if _, err := p.Run(); err != nil {
 		run.Stop()
-		fmt.Fprintln(os.Stderr, "inir update:", err)
+		ui.Log("inir update").Error(err)
 		return 1
 	}
 

@@ -54,7 +54,7 @@ func runDeps(args []string) int {
 		case strings.HasPrefix(a, "--no-") && on[strings.TrimPrefix(a, "--no-")]:
 			on[strings.TrimPrefix(a, "--no-")] = false
 		default:
-			fmt.Fprintf(os.Stderr, "inir deps %s: unknown argument %q\n", args[0], a)
+			ui.Log("inir deps "+args[0]).Error("unknown argument", "arg", a)
 			return 2
 		}
 	}
@@ -62,17 +62,17 @@ func runDeps(args []string) int {
 		table = installedFile("sdata", "deps.toml")
 	}
 	if table == "" {
-		fmt.Fprintln(os.Stderr, "inir deps: no installed shell with sdata/deps.toml")
+		ui.Log("inir deps").Error("no installed shell with sdata/deps.toml")
 		return 1
 	}
 	t, err := deps.Load(table)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir deps:", err)
+		ui.Log("inir deps").Error(err)
 		return 1
 	}
 	p, err := t.Plan(distro, on)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir deps:", err)
+		ui.Log("inir deps").Error(err)
 		return 1
 	}
 	if install {
@@ -134,7 +134,7 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 	}
 	m, err := deps.ManagerFor(p.Distro, deps.RealSystem())
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "inir deps:", err)
+		ui.Log("inir deps").Error(err)
 		return 1
 	}
 	// What is installed is known without the network: when nothing is missing, sources and the index
@@ -149,14 +149,14 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 		ui.Step(os.Stdout, t, "Package sources")
 		if !dryRun {
 			if err := setup("provider", "repos").Run(); err != nil {
-				fmt.Fprintln(os.Stderr, "inir deps: package sources:", err)
+				ui.Log("inir deps").Warn("package sources were not set up", "err", err)
 			}
 		}
 	}
 	if !dryRun {
 		ui.Step(os.Stdout, t, "Package index")
 		if err := m.Refresh(yes); err != nil {
-			fmt.Fprintln(os.Stderr, "inir deps: package index:", err)
+			ui.Log("inir deps").Warn("package index was not refreshed", "err", err)
 		}
 	}
 	s := m.Resolve(p, providers)
@@ -176,23 +176,23 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 	}
 	code := 0
 	if err := m.InstallPackages(s, yes); err != nil {
-		fmt.Fprintln(os.Stderr, "inir deps: packages:", err)
+		ui.Log("inir deps").Error("packages did not install", "err", err)
 		code = 1
 	}
 	if len(s.AUR) > 0 && !m.HasAURHelper() && providers["aur-helper"] {
 		ui.Step(os.Stdout, t, "AUR helper")
 		if err := setup("provider", "aur-helper").Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "inir deps: provider aur-helper:", err)
+			ui.Log("inir deps").Warn("AUR helper was not built", "err", err)
 		}
 	}
 	if err := m.InstallAUR(s, yes); err != nil {
-		fmt.Fprintln(os.Stderr, "inir deps:", err)
+		ui.Log("inir deps").Error("AUR packages did not install", "err", err)
 		code = 1
 	}
 	for _, recipe := range s.Providers {
 		ui.Step(os.Stdout, t, "Building "+recipe)
 		if err := setup("provider", recipe).Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "inir deps: provider %s: %v\n", recipe, err)
+			ui.Log("inir deps").Error("build failed", "provider", recipe, "err", err)
 			code = 1
 		}
 	}
