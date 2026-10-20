@@ -77,9 +77,9 @@ func Main(args []string) int {
 	}
 	var p *tea.Program
 	var run *Run
-	model := NewProgress(t, func() { run.Stop() })
+	model := NewProgress(t, "install", InstallStages(), func() { run.Stop() })
 	p = tea.NewProgram(model)
-	run, err = Start(setupDir, flags, answers, func(m any) { p.Send(m) })
+	run, err = Start(setupDir, "install", flags, answers, false, func(m any) { p.Send(m) })
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "inir install:", err)
 		return 1
@@ -116,24 +116,43 @@ func isSetup(dir string) bool {
 	return err == nil
 }
 
-// Summary is the last thing on screen: how it went, what to look at, what next.
-func Summary(t ui.Theme, m *Progress, logPath string) int {
-	muted := lipgloss.NewStyle().Foreground(t.Muted)
-	faint := lipgloss.NewStyle().Foreground(t.Faint)
-	bold := lipgloss.NewStyle().Bold(true).Foreground(t.Text)
-	width := min(ui.Width(), 96) - 8
-	bullet := func(text string) string { // wrapped lines hang under the text, not the dot
-		return lipgloss.JoinHorizontal(lipgloss.Top, muted.Render("• "), muted.Width(width-2).Render(text)) + "\n"
+// summary holds what every closing card shares: its styles and width.
+type summary struct {
+	t                  ui.Theme
+	muted, faint, bold lipgloss.Style
+	width              int
+	warnings           []string
+	failed             *Stage
+	b                  strings.Builder
+}
+
+func newSummary(t ui.Theme, m *Progress) *summary {
+	s := &summary{
+		t:     t,
+		muted: lipgloss.NewStyle().Foreground(t.Muted),
+		faint: lipgloss.NewStyle().Foreground(t.Faint),
+		bold:  lipgloss.NewStyle().Bold(true).Foreground(t.Text),
+		width: min(ui.Width(), 96) - 8,
 	}
-	var warnings []string
-	var failed *Stage
-	for _, s := range m.Stages() {
-		warnings = append(warnings, s.Warnings...)
-		if s.Status == Failed {
-			failed = s
+	for _, st := range m.Stages() {
+		s.warnings = append(s.warnings, st.Warnings...)
+		if st.Status == Failed {
+			s.failed = st
 		}
 	}
-	var b strings.Builder
+	return s
+}
+
+// bullet wraps its lines under the text, not under the dot.
+func (s *summary) bullet(text string) string {
+	return lipgloss.JoinHorizontal(lipgloss.Top, s.muted.Render("• "), s.muted.Width(s.width-2).Render(text)) + "\n"
+}
+
+// Summary is the last thing on screen: how it went, what to look at, what next.
+func Summary(t ui.Theme, m *Progress, logPath string) int {
+	s := newSummary(t, m)
+	muted, faint, bold, failed, bullet := s.muted, s.faint, s.bold, s.failed, s.bullet
+	b := &s.b
 	switch {
 	case m.Stopped:
 		b.WriteString(bold.Render("Install stopped.") + "\n")
@@ -162,27 +181,37 @@ func Summary(t ui.Theme, m *Progress, logPath string) int {
 			b.WriteString(muted.Render("Log out and pick Niri at the login screen.") + "\n")
 		}
 	}
-	if n := len(warnings); n > 0 {
+	return s.print(m, logPath)
+}
+
+// print closes the card with the warnings and where to look, framed in the
+// tone of how it went, and returns the exit code that goes with it.
+func (s *summary) print(m *Progress, logPath string) int {
+	t, b := s.t, &s.b
+	if n := len(s.warnings); n > 0 {
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("Worth a look (%d)", n)) + "\n")
-		for i, w := range warnings {
+		for i, w := range s.warnings {
 			if i == 5 {
-				b.WriteString(faint.Render(fmt.Sprintf("… and %d more in the log", n-5)) + "\n")
+				b.WriteString(s.faint.Render(fmt.Sprintf("… and %d more in the log", n-5)) + "\n")
 				break
 			}
-			b.WriteString(bullet(w))
+			b.WriteString(s.bullet(w))
 		}
 	}
-	b.WriteString("\n" + faint.Render("Full log  ") + muted.Render(logPath) + "\n")
-	b.WriteString(faint.Render("Checkup   ") + muted.Render("inir doctor"))
+	if home, _ := os.UserHomeDir(); home != "" && strings.HasPrefix(logPath, home+"/") {
+		logPath = "~" + logPath[len(home):]
+	}
+	b.WriteString("\n" + s.faint.Render("Full log  ") + s.muted.Render(logPath) + "\n")
+	b.WriteString(s.faint.Render("Checkup   ") + s.muted.Render("inir doctor"))
 	tone := t.Success
 	switch {
 	case m.Stopped:
 		tone = t.Warning
-	case failed != nil || m.Err != nil:
+	case s.failed != nil || m.Err != nil:
 		tone = t.Error
 	}
 	lipgloss.Println()
-	ui.Card(os.Stdout, tone, lipgloss.NewStyle().Width(width).Render(b.String()))
+	ui.Card(os.Stdout, tone, lipgloss.NewStyle().Width(s.width).Render(b.String()))
 	lipgloss.Println()
 	if tone == t.Success {
 		return 0

@@ -16,6 +16,7 @@ import (
 // events descriptor ("stage<TAB>deps").
 type Stage struct {
 	Key, Title string
+	Expected   time.Duration // how long it usually takes, so the bar keeps its pace
 	Start, End time.Time
 	Status     Status
 	Last       string   // the latest thing setup said in this stage
@@ -32,14 +33,29 @@ const (
 	Skipped
 )
 
-// Stages in the order setup's run_install goes through them.
-func Stages() []*Stage {
+// InstallStages in the order setup's run_install goes through them, with the
+// time each took on a fresh Arch install (measured in a clean container).
+func InstallStages() []*Stage {
 	return []*Stage{
-		{Key: "conflicts", Title: "Checking what is here"},
-		{Key: "deps", Title: "Packages"},
-		{Key: "system", Title: "System setup"},
-		{Key: "files", Title: "Shell and configs"},
-		{Key: "finish", Title: "Finishing up"},
+		{Key: "conflicts", Title: "Checking what is here", Expected: 2 * time.Second},
+		{Key: "deps", Title: "Packages", Expected: 9 * time.Minute},
+		{Key: "system", Title: "System setup", Expected: 10 * time.Second},
+		{Key: "files", Title: "Shell and configs", Expected: 90 * time.Second},
+		{Key: "finish", Title: "Finishing up", Expected: 3 * time.Second},
+	}
+}
+
+// UpdateStages are run_update's seven steps, keyed by their number, with
+// times from a real update of two commits (the restart waits on the shell).
+func UpdateStages() []*Stage {
+	return []*Stage{
+		{Key: "1", Title: "Pulling changes", Expected: 2 * time.Second},
+		{Key: "2", Title: "Syncing files", Expected: 3 * time.Second},
+		{Key: "3", Title: "Running migrations", Expected: time.Second},
+		{Key: "4", Title: "Finalizing", Expected: time.Second},
+		{Key: "5", Title: "Checking dependencies", Expected: 2 * time.Second},
+		{Key: "6", Title: "Python packages", Expected: 2 * time.Second},
+		{Key: "7", Title: "Restarting the shell", Expected: 6 * time.Second},
 	}
 }
 
@@ -58,11 +74,13 @@ type Run struct {
 	done    chan struct{}
 }
 
-// Start runs `setup install -y <args>` from setupDir with env added, quietly:
+// Start runs `setup <sub> -y <args>` from setupDir with env added, quietly:
 // no terminal on stdin (setup asks nothing), its output to the log and to send,
-// and its progress events on descriptor 3.
-func Start(setupDir string, args, env []string, send func(any)) (*Run, error) {
-	logDir := filepath.Join(stateHome(), "inir", "install")
+// and its progress events on descriptor 3. detach also takes the terminal away
+// from it, so a sudo with no ticket fails at once instead of stopping the whole
+// group on a read from a terminal the progress view owns.
+func Start(setupDir, sub string, args, env []string, detach bool, send func(any)) (*Run, error) {
+	logDir := filepath.Join(stateHome(), "inir", sub)
 	os.MkdirAll(logDir, 0o755)
 	logPath := filepath.Join(logDir, time.Now().Format("2006-01-02-150405")+".log")
 	logf, err := os.Create(logPath)
@@ -77,13 +95,13 @@ func Start(setupDir string, args, env []string, send func(any)) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(filepath.Join(setupDir, "setup"), append([]string{"install", "-y"}, args...)...)
+	cmd := exec.Command(filepath.Join(setupDir, "setup"), append([]string{sub, "-y"}, args...)...)
 	cmd.Dir = setupDir
 	cmd.Stdout, cmd.Stderr = outW, outW
 	cmd.ExtraFiles = []*os.File{evW} // descriptor 3
 	cmd.Env = append(os.Environ(), append([]string{"INIR_CLI_DELEGATED=1", "INIR_EVENTS_FD=3"}, env...)...)
 	// Its own process group, so stopping the install stops everything it started.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: !detach, Setsid: detach}
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}

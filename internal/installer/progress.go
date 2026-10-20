@@ -15,19 +15,10 @@ import (
 	"github.com/snowarch/inir-cli/internal/ui"
 )
 
-// How long each stage usually takes on a fresh Arch install (measured in a
-// clean container), so the bar moves at the pace the work does.
-var expected = map[string]time.Duration{
-	"conflicts": 2 * time.Second,
-	"deps":      9 * time.Minute,
-	"system":    10 * time.Second,
-	"files":     90 * time.Second,
-	"finish":    3 * time.Second,
-}
-
-// Progress is the live view of a running install.
+// Progress is the live view of a running install or update.
 type Progress struct {
 	t       ui.Theme
+	job     string // "install", "update": what Ctrl+C would stop
 	stages  []*Stage
 	cur     int // the running stage, -1 before the first
 	tail    []string
@@ -41,13 +32,17 @@ type Progress struct {
 	Stopped bool
 	Elapsed time.Duration
 	Reboot  []string // why the machine needs a restart before iNiR is all there
+	// HideSkipped leaves out the stages setup never reached: an update that
+	// found nothing to pull skips most of them, and saying so seven times is noise.
+	HideSkipped bool
 }
 
-func NewProgress(t ui.Theme, stop func()) *Progress {
+func NewProgress(t ui.Theme, job string, stages []*Stage, stop func()) *Progress {
 	width := min(ui.Width(), 92)
 	return &Progress{
 		t:      t,
-		stages: Stages(),
+		job:    job,
+		stages: stages,
 		cur:    -1,
 		start:  time.Now(),
 		spin:   spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(lipgloss.NewStyle().Foreground(t.Accent))),
@@ -95,7 +90,8 @@ func (m *Progress) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return r
 		}, ansi.Strip(line)))
-		if line != "" {
+		// setup's own step header ("● ◉ ○ 2/7 Syncing files") says what the list already does.
+		if line != "" && !strings.ContainsAny(line[:min(len(line), 4)], "●◉○") {
 			m.tail = append(m.tail, line)
 			if len(m.tail) > 3 {
 				m.tail = m.tail[len(m.tail)-3:]
@@ -163,7 +159,7 @@ func (m *Progress) event(e EventMsg) {
 func (m *Progress) fraction() float64 {
 	var total, done float64
 	for _, s := range m.stages {
-		w := expected[s.Key].Seconds()
+		w := s.Expected.Seconds()
 		total += w
 		switch s.Status {
 		case Done, Failed, Skipped:
@@ -209,6 +205,9 @@ func (m *Progress) View() tea.View {
 			mark, title = lipgloss.NewStyle().Foreground(t.Error).Render("✗"), text.Render(s.Title)
 			clock = Duration(s.End.Sub(s.Start))
 		case Skipped:
+			if m.HideSkipped {
+				continue
+			}
 			mark, title = faint.Render("–"), faint.Render(s.Title+" (skipped)")
 		}
 		pad := max(m.width-8-lipgloss.Width(title)-lipgloss.Width(clock), 1)
@@ -227,7 +226,7 @@ func (m *Progress) View() tea.View {
 	case m.Stopped:
 		b.WriteString("  " + lipgloss.NewStyle().Foreground(t.Warning).Render("Stopping…") + "\n")
 	case m.stopAsk:
-		b.WriteString("  " + lipgloss.NewStyle().Foreground(t.Warning).Render("Press Ctrl+C again to stop the install.") + "\n")
+		b.WriteString("  " + lipgloss.NewStyle().Foreground(t.Warning).Render("Press Ctrl+C again to stop the "+m.job+".") + "\n")
 	case m.Err == nil && m.Elapsed == 0:
 		b.WriteString("  " + faint.Render("ctrl+c stop") + "\n")
 	}

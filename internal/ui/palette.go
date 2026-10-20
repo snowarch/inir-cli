@@ -91,11 +91,12 @@ func Generated() (p Palette, ok bool) {
 	if missing {
 		return Palette{}, false
 	}
-	p.Dark = luminance(p.Surface) < 0.5
+	p.Dark = Luminance(p.Surface) < 0.5
 	return p, true
 }
 
-func luminance(c color.Color) float64 {
+// Luminance is how light a color reads, 0 (black) to 1 (white).
+func Luminance(c color.Color) float64 {
 	r, g, b, _ := c.RGBA()
 	return (0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)) / 0xffff
 }

@@ -54,9 +54,16 @@ func main() {
 			if installer.Interactive(args[1:]) {
 				os.Exit(installer.Main(args[1:]))
 			}
+		case "update":
+			if installer.Interactive(args[1:]) {
+				os.Exit(installer.Update(args[1:]))
+			}
 		case "setup":
 			if len(args) > 1 && args[1] == "install" && installer.Interactive(args[2:]) {
 				os.Exit(installer.Main(args[2:]))
+			}
+			if len(args) > 1 && args[1] == "update" && installer.Interactive(args[2:]) {
+				os.Exit(installer.Update(args[2:]))
 			}
 		case "cli":
 			if len(args) == 2 && args[1] == "version" {
