@@ -220,6 +220,9 @@ type Plan struct {
 	AUR      []string   `json:"aur,omitempty"`
 	First    [][]string `json:"first,omitempty"`
 	Builds   []string   `json:"builds,omitempty"` // in table order
+	// Group is the install group each package and AUR package came in for
+	// (core when it is in core), for people reading the plan.
+	Group map[string]string `json:"-"`
 }
 
 // Plan selects the deps of distro whose groups are on (core always is).
@@ -227,7 +230,7 @@ func (t *Table) Plan(distro string, on map[string]bool) (*Plan, error) {
 	if !isDistro(distro) {
 		return nil, fmt.Errorf("no distro %q in the table (%s)", distro, strings.Join(Distros, ", "))
 	}
-	p := &Plan{Distro: distro}
+	p := &Plan{Distro: distro, Group: map[string]string{}}
 	for _, g := range Groups {
 		if on[g] {
 			p.Groups = append(p.Groups, g)
@@ -244,18 +247,26 @@ func (t *Table) Plan(distro string, on map[string]bool) (*Plan, error) {
 		if len(s.Groups) > 0 {
 			groups = s.Groups
 		}
-		wanted := false
+		group := ""
 		for _, g := range groups {
-			wanted = wanted || g == "core" || on[g]
+			if g == "core" || (on[g] && group == "") {
+				group = g
+			}
 		}
-		if !wanted {
+		if group == "" {
 			continue
 		}
 		for _, x := range s.Packages {
 			pkgs[x] = true
+			if p.Group[x] == "" || group == "core" {
+				p.Group[x] = group
+			}
 		}
 		for _, x := range s.AUR {
 			aur[x] = true
+			if p.Group[x] == "" || group == "core" {
+				p.Group[x] = group
+			}
 		}
 		if len(s.First) > 0 {
 			p.First = append(p.First, s.First)

@@ -56,14 +56,11 @@ func newPrinter(w io.Writer, total int) *printer {
 }
 
 func (p *printer) header(fix bool) {
-	badge := lipgloss.NewStyle().Bold(true).Foreground(p.theme.OnAccent).Background(p.theme.Accent).
-		Padding(0, 1).Render("inir doctor")
 	what := "checking your install"
 	if fix {
 		what = "checking your install, fixing what it can"
 	}
-	lipgloss.Fprintln(p.w)
-	lipgloss.Fprintln(p.w, "  "+badge+"  "+p.muted.Render(what))
+	ui.Header(p.w, p.theme, "inir doctor", what)
 	lipgloss.Fprintln(p.w)
 }
 
@@ -157,11 +154,8 @@ func (p *printer) summary(r *Report) {
 	if r.Summary.Fixable > 0 {
 		verdict = strings.TrimPrefix(verdict+"\nRun inir doctor without --check and it fixes what is marked !.", "\n")
 	}
-	card := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(tone).
-		Padding(0, 2).MarginLeft(2).
-		Render(counts + "\n" + lipgloss.NewStyle().Foreground(tone).Render(verdict))
 	lipgloss.Fprintln(p.w)
-	lipgloss.Fprintln(p.w, card)
+	ui.Card(p.w, tone, counts+"\n"+lipgloss.NewStyle().Foreground(tone).Render(verdict))
 }
 
 // heading is a step's title as a heading: "Checking theme colors..." reads

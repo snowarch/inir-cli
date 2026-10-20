@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/snowarch/inir-cli/internal/deps"
 	"github.com/snowarch/inir-cli/internal/doctor"
 	"github.com/snowarch/inir-cli/internal/shell"
+	"github.com/snowarch/inir-cli/internal/ui"
 )
 
 const depsUsage = "Usage: inir deps plan|install [--distro D] [--no-audio] [--no-toolkit] [--no-screencapture] [--no-fonts] [--table PATH] [--json] [-y] [--dry-run]"
@@ -81,17 +84,14 @@ func runDeps(args []string) int {
 		enc.Encode(p)
 		return 0
 	}
-	fmt.Printf("%s, groups: core %s\n", p.Distro, strings.Join(p.Groups, " "))
-	fmt.Printf("packages (%d): %s\n", len(p.Packages), strings.Join(p.Packages, " "))
-	if len(p.AUR) > 0 {
-		fmt.Printf("AUR (%d): %s\n", len(p.AUR), strings.Join(p.AUR, " "))
+	var steps *deps.Steps
+	if distro == doctor.DetectOS() {
+		if m, err := deps.ManagerFor(distro, deps.RealSystem()); err == nil {
+			s := m.Resolve(p, nil)
+			steps = &s
+		}
 	}
-	for _, f := range p.First {
-		fmt.Printf("first available of: %s\n", strings.Join(f, ", "))
-	}
-	if len(p.Builds) > 0 {
-		fmt.Printf("providers, when still missing: %s\n", strings.Join(p.Builds, " "))
-	}
+	printPlan(os.Stdout, p, steps)
 	return 0
 }
 
@@ -139,12 +139,14 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 	}
 	// What is installed is known without the network: when nothing is missing, sources and the index
 	// stay as they are (on Arch the refresh is a full system upgrade).
+	t := ui.Current()
 	if s := m.Resolve(p, providers); len(s.Install)+len(s.Unavailable)+len(s.AUR)+len(s.Providers) == 0 {
-		fmt.Println("==> everything is installed")
+		ui.Card(os.Stdout, t.Success, "Everything is installed.")
 		return 0
 	}
+	ui.Header(os.Stdout, t, "inir deps", "installing what "+p.Distro+" is missing")
 	if providers["repos"] {
-		fmt.Println("==> package sources")
+		ui.Step(os.Stdout, t, "Package sources")
 		if !dryRun {
 			if err := setup("provider", "repos").Run(); err != nil {
 				fmt.Fprintln(os.Stderr, "inir deps: package sources:", err)
@@ -152,25 +154,24 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 		}
 	}
 	if !dryRun {
-		fmt.Println("==> package index")
+		ui.Step(os.Stdout, t, "Package index")
 		if err := m.Refresh(yes); err != nil {
 			fmt.Fprintln(os.Stderr, "inir deps: package index:", err)
 		}
 	}
 	s := m.Resolve(p, providers)
-	fmt.Printf("==> packages: %d to install", len(s.Install))
+	ui.Step(os.Stdout, t, fmt.Sprintf("Packages: %d to install", len(s.Install)))
 	if len(s.Unavailable) > 0 {
-		fmt.Printf(", not in the repositories: %s", strings.Join(s.Unavailable, " "))
+		lipgloss.Println("    " + lipgloss.NewStyle().Foreground(t.Error).Render("not in the repositories: "+strings.Join(s.Unavailable, " ")))
 	}
-	fmt.Println()
 	if len(s.AUR) > 0 {
-		fmt.Printf("==> AUR: %s\n", strings.Join(s.AUR, " "))
+		ui.Step(os.Stdout, t, "AUR: "+strings.Join(s.AUR, " "))
 	}
 	if len(s.Providers) > 0 {
-		fmt.Printf("==> providers: %s\n", strings.Join(s.Providers, " "))
+		ui.Step(os.Stdout, t, "Built from source: "+strings.Join(s.Providers, " "))
 	}
 	if dryRun {
-		fmt.Println(strings.Join(s.Install, " "))
+		lipgloss.Println("    " + lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Join(s.Install, " ")))
 		return 0
 	}
 	code := 0
@@ -179,7 +180,7 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 		code = 1
 	}
 	if len(s.AUR) > 0 && !m.HasAURHelper() && providers["aur-helper"] {
-		fmt.Println("==> provider aur-helper")
+		ui.Step(os.Stdout, t, "AUR helper")
 		if err := setup("provider", "aur-helper").Run(); err != nil {
 			fmt.Fprintln(os.Stderr, "inir deps: provider aur-helper:", err)
 		}
@@ -189,7 +190,7 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 		code = 1
 	}
 	for _, recipe := range s.Providers {
-		fmt.Println("==> provider", recipe)
+		ui.Step(os.Stdout, t, "Building "+recipe)
 		if err := setup("provider", recipe).Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "inir deps: provider %s: %v\n", recipe, err)
 			code = 1
