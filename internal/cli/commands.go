@@ -78,6 +78,7 @@ var Commands = []Command{
 	{Name: "logs", Desc: "Runtime logs", Flags: []Flag{
 		{Name: "--issues", Desc: "Every warning and error since start, grouped"},
 		{Name: "-n", Desc: "Last N lines", Value: "N"},
+		{Name: "--lines", Desc: "Last N lines", Value: "N"},
 		{Name: "--full", Desc: "All categories"},
 		{Name: "--debug", Desc: "Run in the foreground with debug output"},
 		help}},
@@ -172,6 +173,7 @@ var Commands = []Command{
 			help}}}},
 	{Name: "help", Desc: "Show help"},
 	{Name: "cleanup-orphans", Desc: "Kill what an old shell left running", Hidden: true},
+	{Name: "kill-dialog", Desc: "The dialog that offers to stop conflicting programs", Hidden: true},
 }
 
 // BinaryCommands are words only the inir binary answers; scripts/inir does
@@ -191,6 +193,7 @@ var BinaryCommands = []Command{
 			{Name: "--json", Desc: "As JSON"}}},
 		{Name: "install", Desc: "Install what the plan says is missing", Flags: []Flag{
 			{Name: "-y", Desc: "Don't ask"},
+			{Name: "--yes", Desc: "Don't ask"},
 			{Name: "--dry-run", Desc: "Show the steps, change nothing"},
 			{Name: "--no-audio", Desc: "Without the audio group"},
 			{Name: "--no-toolkit", Desc: "Without the toolkit group"},

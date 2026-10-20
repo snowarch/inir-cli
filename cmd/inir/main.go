@@ -28,8 +28,17 @@ func main() {
 			delegate(args)
 		}
 	}()
+	if path, ok := wantsHelp(args); ok {
+		if code, handled := runHelp(path); handled {
+			os.Exit(code)
+		}
+	}
 	if len(args) > 0 {
 		switch args[0] {
+		case "man":
+			if len(args) == 1 {
+				os.Exit(runMan())
+			}
 		case "__complete":
 			os.Exit(runComplete(args[1:]))
 		case "completions":

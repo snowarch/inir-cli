@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Same output and exit code as the bash launcher, for every IPC target, also
-# when the launcher hands over to the binary.
+# when the launcher hands over to the binary. Help the binary draws is checked
+# to work, not to match.
 #   test/parity.sh <inir shell checkout> <inir binary>
 # Runs with a throwaway HOME and runtime dir, so no shell is running and
 # nothing reaches the real session. Only calls that never start the shell.
@@ -42,6 +43,14 @@ for call in "${calls[@]}"; do
     printf 'DIFF through scripts/inir: inir %s (binary rc=%s, front door rc=%s)\n' "$call" "$actual_rc" "$front_rc"
     diff <(printf '%s\n' "$actual") <(printf '%s\n' "$front") | head -6
     failures=$((failures + 1))
+  fi
+  # Help the binary draws itself (Fang) is its own: it only has to work.
+  if [[ "$call" == help* || "$call" == --help || "$call" == *" --help" ]] && [[ "$actual" == *USAGE* ]]; then
+    if ((actual_rc != 0)); then
+      printf 'FAIL: inir %s drew help but exited %s\n' "$call" "$actual_rc"
+      failures=$((failures + 1))
+    fi
+    continue
   fi
   if [[ "$expected" != "$actual" || $expected_rc != "$actual_rc" ]]; then
     printf 'DIFF: inir %s (bash rc=%s, go rc=%s)\n' "$call" "$expected_rc" "$actual_rc"
