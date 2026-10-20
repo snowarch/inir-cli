@@ -15,6 +15,7 @@ import (
 // Palette is the subset of the shell's Material scheme the terminal uses.
 type Palette struct {
 	Primary          color.Color
+	OnPrimary        color.Color
 	Secondary        color.Color
 	Tertiary         color.Color
 	Error            color.Color
@@ -66,6 +67,7 @@ func Generated() (p Palette, ok bool) {
 	}
 	p = Palette{
 		Primary:          get("primary"),
+		OnPrimary:        get("on_primary"),
 		Secondary:        get("secondary"),
 		Tertiary:         get("tertiary"),
 		Error:            get("error"),

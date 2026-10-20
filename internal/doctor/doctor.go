@@ -53,6 +53,11 @@ func Run(e *Env, o Options) *Report {
 		c.bashWholeDoctor(o)
 		o.Fix, o.Pretty = false, false // it printed every step already
 	}
+	var pr *printer
+	if o.Pretty {
+		pr = newPrinter(o.Out, len(Steps))
+		pr.header(o.Fix)
+	}
 	for _, st := range Steps {
 		if !o.wants(st.N) {
 			continue
@@ -61,19 +66,25 @@ func Run(e *Env, o Options) *Report {
 			c.rebuildForQt(o.Out)
 		}
 		s := &step{}
+		if pr != nil {
+			pr.spin(st)
+		}
 		st.check(c, s)
+		if pr != nil {
+			pr.stop()
+		}
 		res := StepResult{N: st.N, ID: st.ID, Title: st.Title, Status: s.status(), Lines: s.lines, Missing: s.missing}
 		if o.Fix && st.Fixer && (res.Status == StatusFail || res.Status == StatusFixable || res.Status == StatusSkip) {
 			res = c.repair(st, res, o)
 		}
 		if o.Pretty {
-			printStep(o.Out, res, len(Steps))
+			pr.step(res)
 		}
 		r.Steps = append(r.Steps, res)
 	}
 	r.count()
 	if o.Pretty {
-		printSummary(o.Out, r)
+		pr.summary(r)
 	}
 	return r
 }
@@ -196,34 +207,6 @@ func isTerminal(f *os.File) bool {
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
-var marks = map[Level]string{
-	LevelPass: "✓", LevelFail: "✗", LevelFixable: "⚠", LevelFixed: "⚠", LevelWarn: "⚠", LevelInfo: "→", LevelHint: " ",
-}
-
-func printStep(w io.Writer, s StepResult, total int) {
-	mark := map[Status]string{StatusPass: "✓", StatusFail: "✗", StatusFixable: "⚠", StatusFixed: "⚠", StatusSkip: "→"}[s.Status]
-	results := 0
-	for _, l := range s.Lines {
-		if l.Level != LevelHint {
-			results++
-		}
-	}
-	if results == 1 && len(s.Lines) == 1 {
-		fmt.Fprintf(w, "  %2d/%d  %s %s\n", s.N, total, mark, lineText(s.Lines[0]))
-		return
-	}
-	fmt.Fprintf(w, "  %2d/%d  %s %s\n", s.N, total, mark, s.Title)
-	for _, l := range s.Lines {
-		if l.Level == LevelHint {
-			for _, h := range strings.Split(l.Text, "\n") {
-				fmt.Fprintf(w, "          %s\n", h)
-			}
-			continue
-		}
-		fmt.Fprintf(w, "        %s %s\n", marks[l.Level], lineText(l))
-	}
-}
-
 func lineText(l Line) string {
 	switch l.Level {
 	case LevelFixable:
@@ -232,23 +215,4 @@ func lineText(l Line) string {
 		return "Fixed: " + l.Text
 	}
 	return l.Text
-}
-
-func printSummary(w io.Writer, r *Report) {
-	fmt.Fprintln(w)
-	if r.Mode == "check" {
-		fmt.Fprintf(w, "  Passed %d   Fixable %d   Failed %d\n", r.Summary.Passed, r.Summary.Fixable, r.Summary.Failed)
-	} else {
-		fmt.Fprintf(w, "  Passed %d   Fixed %d   Failed %d\n", r.Summary.Passed, r.Summary.Fixed, r.Summary.Failed)
-	}
-	switch {
-	case r.Summary.Failed > 0:
-		fmt.Fprintln(w, "  ✗ Some issues need manual attention.")
-	case r.Summary.Fixable > 0:
-		fmt.Fprintln(w, "  ⚠ inir doctor can fix what is marked.")
-	case r.Summary.Fixed > 0:
-		fmt.Fprintln(w, "  ✓ All issues fixed automatically. Restart the shell to apply: inir restart")
-	default:
-		fmt.Fprintln(w, "  ✓ Everything looks good!")
-	}
 }

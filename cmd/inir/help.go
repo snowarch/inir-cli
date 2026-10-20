@@ -127,7 +127,7 @@ func loadRegistry() *ipc.Registry {
 
 func helpTree(reg *ipc.Registry) *cobra.Command {
 	cobra.EnableCommandSorting = false
-	root := &cobra.Command{Use: "inir", Long: rootLong, Example: rootExample,
+	root := &cobra.Command{Use: "inir", Short: "Your Niri shell, from the terminal", Long: rootLong, Example: rootExample,
 		Run: func(*cobra.Command, []string) {}}
 	root.SetHelpCommand(&cobra.Command{Use: "help", Hidden: true})
 	for _, g := range helpGroups {
