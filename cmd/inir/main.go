@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/snowarch/inir-cli/internal/cli"
+	"github.com/snowarch/inir-cli/internal/installer"
 	"github.com/snowarch/inir-cli/internal/ipc"
 	"github.com/snowarch/inir-cli/internal/shell"
 )
@@ -49,6 +50,14 @@ func main() {
 			}
 		case "deps":
 			os.Exit(runDeps(args[1:]))
+		case "install":
+			if installer.Interactive(args[1:]) {
+				os.Exit(installer.Main(args[1:]))
+			}
+		case "setup":
+			if len(args) > 1 && args[1] == "install" && installer.Interactive(args[2:]) {
+				os.Exit(installer.Main(args[2:]))
+			}
 		case "cli":
 			if len(args) == 2 && args[1] == "version" {
 				fmt.Println("inir-cli", buildinfo.String())
