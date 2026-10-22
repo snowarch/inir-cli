@@ -20,6 +20,28 @@ shell's `sdata/deps.toml` (what iNiR installs per distro and install group) and 
 packages, AUR packages and providers a full install would use. Running that plan, and the
 rest of install and update, moves here next.
 
+
+## Long commands and your look
+
+- **`inir run -- CMD`** runs CMD right there (through a pty, so it still draws its own
+  progress bars) and keeps one notification about it: the last percentage it printed as the
+  standard `value` hint, or the time so far, plus a Stop button; then how it ended. Plain
+  `inir run` still starts the shell.
+- **`inir hook bash|zsh|fish`** prints a snippet for your rc file (`eval "$(inir hook bash)"`,
+  `inir hook fish | source`): anything that runs longer than 10 seconds gets the same
+  notification. Editors, pagers, ssh and friends are left alone (`INIR_HOOK_IGNORE` adds more,
+  `INIR_HOOK_AFTER` changes the seconds). Stop sends Ctrl-C to the job.
+- Both speak the notification spec over D-Bus directly (no notify-send, no D-Bus library), so
+  any notification server shows them.
+- **`inir look export [FILE]`** writes everything that makes your desktop look like yours
+  (family, iRiS Design, colors, appearance, bar, dock, pieces, widgets, wallpaper path and a
+  link when it came from Wallhaven) as what differs from the shell's defaults. Your pinned
+  apps, paths, screens and accounts stay out.
+- **`inir look import FILE|URL`** applies one (`--dry-run` lists every setting it would
+  change); keys outside the look or of the wrong type are refused. Each import takes a
+  snapshot first: **`inir look history`** lists them, **`inir look restore N`** goes back,
+  byte for byte.
+
 ## Where it sits
 
 The binary goes next to the bash launcher, not in place of it: `scripts/inir` looks for it at

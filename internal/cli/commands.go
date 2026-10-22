@@ -64,7 +64,7 @@ var installFlags = []Flag{
 // Commands is every word scripts/inir's dispatch takes before it treats a word
 // as an IPC target, in the order `inir help` lists them.
 var Commands = []Command{
-	{Name: "run", Desc: "Run the shell", Flags: withConfig(
+	{Name: "run", Desc: "Run the shell; inir run -- CMD runs CMD with a live notification", Flags: withConfig(
 		Flag{Name: "--daemon", Desc: "In the background"},
 		Flag{Name: "--foreground", Desc: "In this terminal"},
 		Flag{Name: "--session", Desc: "As the session service starts it"})},
@@ -199,7 +199,25 @@ var BinaryCommands = []Command{
 			{Name: "--no-toolkit", Desc: "Without the toolkit group"},
 			{Name: "--no-screencapture", Desc: "Without the screencapture group"},
 			{Name: "--no-fonts", Desc: "Without the fonts group"}}}}},
+	{Name: "look", Desc: "Your whole look in one file: share it, apply one, go back", Subs: []Sub{
+		{Name: "export", Desc: "Write your look to FILE (stdout when piped or -)", Flags: []Flag{
+			{Name: "--name", Desc: "What to call it", Value: "NAME"},
+			{Name: "--wallpaper", Desc: "Link to the wallpaper for people who don't have it", Value: "URL"}}},
+		{Name: "import", Desc: "Apply a look file or https link, with a snapshot first", Flags: []Flag{
+			{Name: "--dry-run", Desc: "Show every setting it would change"},
+			{Name: "--no-wallpaper", Desc: "Keep your wallpaper"}}},
+		{Name: "history", Desc: "Snapshots taken before each import or restore", Flags: []Flag{
+			{Name: "--json", Desc: "As JSON"}}},
+		{Name: "restore", Desc: "Go back to snapshot N of the history", Flags: []Flag{
+			{Name: "--dry-run", Desc: "Show every setting it would change"},
+			{Name: "--no-wallpaper", Desc: "Keep your wallpaper"}}}}},
+	{Name: "hook", Desc: "Live notifications for long commands in your shell", Subs: []Sub{
+		{Name: "bash", Desc: `eval "$(inir hook bash)" in ~/.bashrc`, Flags: []Flag{hookAfter}},
+		{Name: "zsh", Desc: `eval "$(inir hook zsh)" in ~/.zshrc`, Flags: []Flag{hookAfter}},
+		{Name: "fish", Desc: "inir hook fish | source in config.fish", Flags: []Flag{hookAfter}}}},
 }
+
+var hookAfter = Flag{Name: "--after", Desc: "Seconds a command runs before it shows (10)", Value: "SECONDS"}
 
 // BindFlags are the options of `inir bind` before the keys.
 var BindFlags = []Flag{

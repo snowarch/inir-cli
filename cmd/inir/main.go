@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/snowarch/inir-cli/internal/activity"
 	"github.com/snowarch/inir-cli/internal/cli"
 	"github.com/snowarch/inir-cli/internal/installer"
 	"github.com/snowarch/inir-cli/internal/ipc"
@@ -51,6 +52,16 @@ func main() {
 			}
 		case "deps":
 			os.Exit(runDeps(args[1:]))
+		case "run":
+			if argv, title, ok := activityArgs(args[1:]); ok {
+				os.Exit(runActivity(argv, title))
+			}
+		case "hook":
+			os.Exit(runHook(args[1:]))
+		case "__hook":
+			os.Exit(activity.Hook(args[1:]))
+		case "look":
+			os.Exit(runLook(args[1:]))
 		case "install":
 			if installer.Interactive(args[1:]) {
 				os.Exit(installer.Main(args[1:]))
@@ -177,6 +188,20 @@ func runningShellExe() (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// shellCall makes one IPC call on the running shell; false when none runs or
+// the call fails.
+func shellCall(target string, args ...string) bool {
+	dir, ok := runningShell()
+	if !ok {
+		return false
+	}
+	qs, err := quickshell()
+	if err != nil {
+		return false
+	}
+	return exec.Command(qs, append([]string{"-p", dir, "ipc", "call", target}, args...)...).Run() == nil
 }
 
 // delegate replaces this process with the shell's bash launcher.
