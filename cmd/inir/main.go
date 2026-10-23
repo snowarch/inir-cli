@@ -174,7 +174,8 @@ func runningShellExe() (string, bool) {
 		}
 		pid := filepath.Base(link)
 		comm, err := os.ReadFile(filepath.Join("/proc", pid, "comm"))
-		if err != nil || strings.TrimSpace(string(comm)) != "qs" {
+		// inir's launcher runs it through an inir-shell link (ananicy's `qs` rule nices it).
+		if name := strings.TrimSpace(string(comm)); err != nil || (name != "qs" && name != "inir-shell") {
 			continue
 		}
 		exe, err := os.Readlink(filepath.Join("/proc", pid, "exe"))
