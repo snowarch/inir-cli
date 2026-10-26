@@ -29,12 +29,12 @@ var helpGroups = []struct {
 	{"yours", "Make it yours", []string{"theme", "look", "hub", "bind", "config", "completions", "hook"}},
 	{"apps", "Open things", []string{"terminal", "browser", "colorpicker", "close-window"}},
 	{"keep", "Install and keep", []string{"install", "reinstall", "migrate", "rollback", "my-changes", "backup", "uninstall", "deps"}},
-	{"hood", "Under the hood", []string{"ipc", "service", "info", "version", "setup", "path", "test-local", "dev", "cli"}},
+	{"hood", "Under the hood", []string{"ipc", "service", "info", "version", "setup", "path", "dev", "cli"}},
 }
 
 // rootHidden are words people rarely type by hand: they keep their own help
 // (inir path --help) but stay out of the first screen.
-var rootHidden = []string{"open", "kill", "settings-window", "waffle-settings-window", "ipc", "path", "test-local", "setup", "dev", "cli"}
+var rootHidden = []string{"open", "kill", "settings-window", "waffle-settings-window", "ipc", "path", "setup", "dev", "cli"}
 
 // favoriteActions are the IPC targets `inir help` shows by name; the rest wait
 // in `inir help actions`.

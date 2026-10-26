@@ -164,8 +164,6 @@ var Commands = []Command{
 	{Name: "waffle-settings-window", Desc: "Open the Waffle settings window", Flags: withConfig(
 		Flag{Name: "--toggle", Desc: "Close it if open"})},
 	{Name: "path", Desc: "Print the shell directory", Flags: withConfig()},
-	{Name: "test-local", Desc: "Run the local tests", Flags: withConfig(
-		Flag{Name: "--with-runtime", Desc: "Also restart the shell and check its logs"})},
 	{Name: "dev", Desc: "Developer tools", Target: "dev", Subs: []Sub{
 		{Name: "audit", Desc: "Audit destinations touched by changed files", Flags: []Flag{
 			{Name: "--all", Desc: "Every destination"},
