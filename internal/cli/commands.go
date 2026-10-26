@@ -159,9 +159,9 @@ var Commands = []Command{
 	{Name: "browser", Desc: "Open the browser", Flags: withConfig()},
 	{Name: "close-window", Desc: "Close the focused window", Flags: withConfig()},
 	{Name: "colorpicker", Desc: "Pick a color from the screen", Flags: []Flag{help}},
-	{Name: "settings-window", Desc: "Open the settings window", Flags: withConfig(
+	{Name: "settings-window", Desc: "Open the family's Settings window", Flags: withConfig(
 		Flag{Name: "--toggle", Desc: "Close it if open"})},
-	{Name: "waffle-settings-window", Desc: "Open the Waffle settings window", Flags: withConfig(
+	{Name: "waffle-settings-window", Desc: "Old name of settings-window", Flags: withConfig(
 		Flag{Name: "--toggle", Desc: "Close it if open"})},
 	{Name: "path", Desc: "Print the shell directory", Flags: withConfig()},
 	{Name: "dev", Desc: "Developer tools", Target: "dev", Subs: []Sub{
