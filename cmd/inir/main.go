@@ -52,6 +52,10 @@ func main() {
 			}
 		case "deps":
 			os.Exit(runDeps(args[1:]))
+		case "hub":
+			if code, handled := runHub(args[1:]); handled {
+				os.Exit(code)
+			}
 		case "run":
 			if argv, title, ok := activityArgs(args[1:]); ok {
 				os.Exit(runActivity(argv, title))

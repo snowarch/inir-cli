@@ -52,6 +52,8 @@ for call in "${calls[@]}"; do
     fi
     continue
   fi
+  # The hub client lives only in the binary: bash alone says so.
+  [[ "$call" == hub ]] && continue
   if [[ "$expected" != "$actual" || $expected_rc != "$actual_rc" ]]; then
     printf 'DIFF: inir %s (bash rc=%s, go rc=%s)\n' "$call" "$expected_rc" "$actual_rc"
     diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | head -6
