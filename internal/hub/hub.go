@@ -484,6 +484,10 @@ func (e *Env) Catalogue(maxAge time.Duration) ([]Item, []Source) {
 			item["source"] = source
 			item["sourceName"] = state.Name
 			item["packageUrl"] = join(c.URL, str(raw, "package"))
+			// Only a local index may point at local files.
+			if strings.HasPrefix(str(item, "packageUrl"), "file:") && !strings.HasPrefix(c.URL, "file:") {
+				continue
+			}
 			item["previewUrl"] = ""
 			if p := str(raw, "preview"); p != "" {
 				item["previewUrl"] = join(c.URL, p)
@@ -529,7 +533,7 @@ func (e *Env) records() map[string]Record {
 		if json.Unmarshal(raw, &r) != nil || r.Version == "" {
 			continue
 		}
-		if _, ok := KindOf(r.Kind); ok {
+		if k, ok := KindOf(r.Kind); ok && validID(k, id) {
 			out[id] = r
 		}
 	}
@@ -745,6 +749,11 @@ func (e *Env) place(item Item, kind Kind, data []byte) (string, error) {
 	if kind.Name == "theme" || kind.Name == "iris-theme" {
 		return target, os.Rename(native, target)
 	}
+	if kind.Plugin {
+		if err := e.canLink(id, str(item, "provides")); err != nil {
+			return "", err
+		}
+	}
 	old := filepath.Join(tmp, "old")
 	if exists(target) {
 		if err := os.Rename(target, old); err != nil {
@@ -759,14 +768,18 @@ func (e *Env) place(item Item, kind Kind, data []byte) (string, error) {
 	}
 	if kind.Plugin {
 		if err := e.link(id, str(item, "provides")); err != nil {
+			os.RemoveAll(target)
+			if exists(old) {
+				os.Rename(old, target)
+			}
 			return "", err
 		}
 	}
 	return target, nil
 }
 
-// link puts a plugin at its shell path (a family at modules/<id>), so the shell imports it as if it were in the tree.
-func (e *Env) link(id, provides string) error {
+// canLink: the shell has the folder a plugin goes in and nothing of someone else's sits at its path.
+func (e *Env) canLink(id, provides string) error {
 	if e.Shell == "" {
 		return fail(ExitError, "no iNiR shell installed to link %s into", id)
 	}
@@ -774,14 +787,20 @@ func (e *Env) link(id, provides string) error {
 	if !isDir(filepath.Dir(at)) {
 		return fail(ExitError, "%s goes in %s, which this shell does not have", id, path.Dir(provides))
 	}
-	want := e.target("family", id)
+	if _, err := os.Readlink(at); err != nil && exists(at) {
+		return fail(ExitConflict, "%s already exists and was not installed from the hub", at)
+	}
+	return nil
+}
+
+// link puts a plugin at its shell path (a family at modules/<id>), so the shell imports it as if it were in the tree.
+func (e *Env) link(id, provides string) error {
+	if err := e.canLink(id, provides); err != nil {
+		return err
+	}
+	at, want := filepath.Join(e.Shell, provides), e.target("family", id)
 	if dest, err := os.Readlink(at); err == nil && dest == want {
 		return nil
-	}
-	if e.linkTaken(id, provides) {
-		if _, err := os.Readlink(at); err != nil {
-			return fail(ExitConflict, "%s already exists and was not installed from the hub", at)
-		}
 	}
 	tmp := at + ".hub-link"
 	os.Remove(tmp)
