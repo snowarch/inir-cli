@@ -44,6 +44,11 @@ rest of install and update, moves here next.
 
 ## Where it sits
 
+iNiR is a few pieces, each with one job: [iNiR](https://github.com/snowarch/iNiR) is the shell, in QML;
+[qs-rs](https://github.com/snowarch/qs-rs) runs it; [inir-accel](https://github.com/snowarch/inir-accel) does what the
+shell runs in the background; this is the command you type; [inir-hub](https://github.com/snowarch/inir-hub) holds
+the families, themes and widgets you install, served at [inir.space/hub](https://inir.space/hub).
+
 The binary goes next to the bash launcher, not in place of it: `scripts/inir` looks for it at
 `$INIR_CLI`, `~/.local/share/inir/cli/inir`, `/usr/local/lib/inir/inir` and
 `/usr/lib/inir/inir`, execs it, and the binary execs the same launcher back for what it does
