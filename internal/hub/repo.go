@@ -90,6 +90,7 @@ type Repo struct {
 	Root     string
 	Errors   []string
 	Warnings []string
+	Fix      bool // validate --fix writes the qmldir files a plugin lacks
 }
 
 // FindRepo walks up from dir to the hub repo that holds it.
@@ -180,28 +181,91 @@ func kindOfDir(folder string) (Kind, bool) {
 	return Kind{}, false
 }
 
-// qmldirsWhole: stock Quickshell trusts a hand-written qmldir whole, so a type it leaves out is "not a type" for
-// everyone who runs Quickshell (qs-rs reads the folder and never shows it).
-func (r *Repo) qmldirsWhole(folder string) {
+// qmldirsWhole: every folder of a plugin that holds types carries a qmldir, listing all of them. Stock Quickshell
+// reads them from disk and never scans the plugin (a scan costs everyone seconds at every start), and it trusts a
+// qmldir whole: a type it leaves out is "not a type" for everyone on Quickshell (qs-rs reads the folder itself).
+func (r *Repo) qmldirsWhole(folder, provides string) {
 	filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Name() != "qmldir" {
+		if err != nil || !d.IsDir() {
 			return nil
 		}
-		b, _ := os.ReadFile(p)
+		if p != folder && strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir
+		}
+		qmls, _ := filepath.Glob(filepath.Join(p, "[A-Z]*.qml"))
+		if len(qmls) == 0 {
+			return nil
+		}
+		at := filepath.Join(p, "qmldir")
+		b, err := os.ReadFile(at)
+		if err != nil {
+			sub, _ := filepath.Rel(folder, p)
+			if !r.Fix {
+				r.errorf(p, "has no qmldir, so Quickshell can't find its types (inir hub validate --fix writes it)")
+			} else if werr := os.WriteFile(at, []byte(synthQmldir(filepath.ToSlash(filepath.Join(provides, sub)), qmls)), 0o644); werr != nil {
+				r.errorf(p, "can't write its qmldir: %v", werr)
+			} else {
+				fmt.Println("wrote " + r.rel(at))
+			}
+			return nil
+		}
 		listed := map[string]bool{}
 		for _, line := range strings.Split(string(b), "\n") {
 			if f := strings.Fields(line); len(f) > 0 && strings.HasSuffix(f[len(f)-1], ".qml") {
-				listed[f[len(f)-1]] = true
+				listed[f[len(f)-1]] = slices.Contains(f, "singleton")
 			}
 		}
-		qmls, _ := filepath.Glob(filepath.Join(filepath.Dir(p), "[A-Z]*.qml"))
 		for _, q := range qmls {
-			if !listed[filepath.Base(q)] {
-				r.errorf(p, "lists no %s: Quickshell won't know that type", filepath.Base(q))
+			name := filepath.Base(q)
+			single, ok := listed[name]
+			_, pragma := qmlPragmas(q)
+			switch {
+			case !ok:
+				r.errorf(at, "lists no %s: Quickshell won't know that type", name)
+			case single != pragma:
+				r.errorf(at, "%s is %s in its file: its qmldir line says otherwise", name, map[bool]string{true: "a singleton", false: "not a singleton"}[pragma])
 			}
 		}
 		return nil
 	})
+}
+
+// synthQmldir: the qmldir Quickshell would write for a folder at that shell path (src/core/scan.cpp).
+func synthQmldir(shellPath string, qmls []string) string {
+	var b strings.Builder
+	if qsImportPath.MatchString(shellPath) {
+		b.WriteString("module qs." + strings.ReplaceAll(shellPath, "/", ".") + "\n")
+	}
+	slices.Sort(qmls)
+	for _, q := range qmls {
+		internal, single := qmlPragmas(q)
+		name := strings.TrimSuffix(filepath.Base(q), ".qml")
+		if internal {
+			b.WriteString("internal ")
+		}
+		if single {
+			b.WriteString("singleton ")
+		}
+		b.WriteString(name + " 1.0 " + name + ".qml\n")
+	}
+	return b.String()
+}
+
+// qmlPragmas reads a QML file's header as Quickshell does: `//@ pragma Internal`, `pragma Singleton`.
+func qmlPragmas(file string) (internal, singleton bool) {
+	data, _ := os.ReadFile(file)
+	for _, line := range strings.Split(string(data), "\n") {
+		switch line = strings.TrimSpace(line); {
+		case line == "pragma Singleton":
+			singleton = true
+		case line == "//@ pragma Internal":
+			internal = true
+		case strings.HasPrefix(line, "import"):
+		case strings.Contains(line, "{"):
+			return
+		}
+	}
+	return
 }
 
 func filesOf(folder string) []string {
@@ -499,7 +563,7 @@ func (r *Repo) check(folder string) *entry {
 			r.errorf(hubFile, `"requires" lists the ids of the plugins it needs`)
 		}
 		e.item["surfaces"], e.item["icon"], e.item["provides"] = []string{"shell"}, orDefault(text(native, "icon"), "extension"), provides
-		r.qmldirsWhole(folder)
+		r.qmldirsWhole(folder, provides)
 		if len(needs) > 0 {
 			e.item["requires"] = needs
 		}

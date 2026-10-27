@@ -29,7 +29,7 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   refresh | changed KIND                ask the running shell to read the hub again
 
 In a hub repo:
-  validate [ITEM_DIR...]                check every item, or the given ones
+  validate [--fix] [ITEM_DIR...]        check every item, or the given ones (--fix writes missing qmldir files)
   bumps [--base REF]                    changed items must raise their version (default origin/main)
   new KIND ID [--author GH]             start an item from templates/KIND
   build [--out DIR]                     index.json, packages, previews, gallery (default dist)
@@ -335,6 +335,9 @@ func runHubRepo(verb string, args []string) int {
 	}
 	switch verb {
 	case "validate":
+		if i := slices.Index(args, "--fix"); i != -1 {
+			repo.Fix, args = true, slices.Delete(args, i, i+1)
+		}
 		entries := repo.Validate(args)
 		repo.Report()
 		if len(repo.Errors) > 0 {

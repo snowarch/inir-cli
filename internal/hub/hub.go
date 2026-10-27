@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -801,7 +800,7 @@ func (e *Env) link(id, provides, want string) error {
 	}
 	at := filepath.Join(e.Shell, provides)
 	if dest, err := os.Readlink(at); err == nil && dest == want {
-		return e.writeScanIndex()
+		return e.writeQmldirs()
 	}
 	tmp := at + ".hub-link"
 	os.Remove(tmp)
@@ -811,129 +810,66 @@ func (e *Env) link(id, provides, want string) error {
 	if err := os.Rename(tmp, at); err != nil {
 		return err
 	}
-	if err := e.writeScanIndex(); err != nil {
+	if err := e.writeQmldirs(); err != nil {
 		os.Remove(at)
 		return err
 	}
 	return nil
 }
 
-// ScanIndex is the shell-root file that imports the linked plugins' folders: stock Quickshell only registers
-// folders an import reaches from the root (src/core/scan.cpp), and plugins are loaded by path.
+// ScanIndex was a shell-root file importing every linked plugin folder so stock Quickshell scanned them; its scan
+// grows with folders x imports (12 s at 205 folders). Plugins carry their own qmldir now and the index goes.
 const ScanIndex = "HubScan.qml"
 
 var qsImportPath = regexp.MustCompile(`^[A-Za-z0-9_/]+$`)
 
-// writeScanIndex rewrites ScanIndex from the links under modules/ (qs-rs reads folders itself; harmless there).
-// It names only the linked folders Quickshell must register: those some file imports, and those whose files use a
-// sibling's type (stock Quickshell serves files through qs:, so even a folder loaded by path needs its qmldir).
-// Every extra folder slows its scan for everyone, which checks each import against each folder seen (205 folders: 9 s).
-func (e *Env) writeScanIndex() error {
+// writeQmldirs gives every linked folder that holds types and has no qmldir the one Quickshell would synthesize,
+// so stock Quickshell finds them without scanning (hub plugins ship theirs; this covers older and local ones), and
+// removes the old scan index. qs-rs reads folders itself either way.
+func (e *Env) writeQmldirs() error {
 	if e.Shell == "" {
 		return nil
 	}
-	linked, needed := map[string]map[string][]byte{}, map[string]bool{}
-	var walk func(dir, rel string, isLinked bool, depth int)
-	walk = func(dir, rel string, isLinked bool, depth int) {
+	var first error
+	var walk func(dir, rel string, linked bool, depth int)
+	walk = func(dir, rel string, linked bool, depth int) {
 		entries, err := os.ReadDir(dir)
 		if err != nil || depth > 16 {
 			return
 		}
+		var qmls []string
+		hasQmldir := false
 		for _, d := range entries {
 			name, sub := d.Name(), filepath.Join(dir, d.Name())
-			fileLinked := isLinked
-			if d.Type()&os.ModeSymlink != 0 {
-				real, err := filepath.EvalSymlinks(sub)
-				if err != nil {
-					continue
-				}
-				if isDir(real) {
-					// links inside linked plugins too (a component in a family)
-					walk(real, path.Join(rel, name), true, depth+1)
-					continue
-				}
-				fileLinked = true
-			}
 			switch {
+			case d.Type()&os.ModeSymlink != 0:
+				// links inside linked plugins too (a component in a family)
+				if real, err := filepath.EvalSymlinks(sub); err == nil && isDir(real) {
+					walk(real, path.Join(rel, name), true, depth+1)
+				} else if err == nil && name[0] >= 'A' && name[0] <= 'Z' && strings.HasSuffix(name, ".qml") {
+					qmls = append(qmls, sub)
+				}
 			case d.IsDir():
-				walk(sub, path.Join(rel, name), isLinked, depth+1)
-			case strings.HasSuffix(name, ".qml"):
-				data, err := os.ReadFile(sub)
-				if err != nil {
-					// unread is unknown: name the folder rather than risk a missing type
-					needed[rel] = true
-					continue
+				if !strings.HasPrefix(name, ".") {
+					walk(sub, path.Join(rel, name), linked, depth+1)
 				}
-				if fileLinked && name[0] >= 'A' && name[0] <= 'Z' && qsImportPath.MatchString(rel) {
-					if linked[rel] == nil {
-						linked[rel] = map[string][]byte{}
-					}
-					linked[rel][strings.TrimSuffix(name, ".qml")] = data
-				}
-				scanImports(data, rel, needed)
-			case strings.HasSuffix(name, ".qml.json"):
-				needed[rel] = true
+			case name == "qmldir":
+				hasQmldir = true
+			case name[0] >= 'A' && name[0] <= 'Z' && strings.HasSuffix(name, ".qml"):
+				qmls = append(qmls, sub)
+			}
+		}
+		if linked && !hasQmldir && len(qmls) > 0 {
+			if err := writeAtomic(filepath.Join(dir, "qmldir"), []byte(synthQmldir(rel, qmls))); err != nil && first == nil {
+				first = err
 			}
 		}
 	}
 	walk(filepath.Join(e.Shell, "modules"), "modules", false, 0)
-	var b strings.Builder
-	b.WriteString("// Written by inir hub: imports the plugin folders Quickshell has to register.\n")
-	b.WriteString("import QtQuick\n")
-	for _, dir := range slices.Sorted(maps.Keys(linked)) {
-		if needed[dir] || usesSibling(linked[dir]) {
-			b.WriteString("import qs." + strings.ReplaceAll(dir, "/", ".") + "\n")
-		}
+	if b, err := os.ReadFile(filepath.Join(e.Shell, ScanIndex)); err == nil && strings.HasPrefix(string(b), "// Written by inir hub") {
+		os.Remove(filepath.Join(e.Shell, ScanIndex))
 	}
-	b.WriteString("\nQtObject {}\n")
-	return writeAtomic(filepath.Join(e.Shell, ScanIndex), []byte(b.String()))
-}
-
-// usesSibling: a file of the folder names another of its types.
-func usesSibling(types map[string][]byte) bool {
-	if len(types) < 2 {
-		return false
-	}
-	names := slices.Sorted(maps.Keys(types))
-	for i := range names {
-		names[i] = regexp.QuoteMeta(names[i])
-	}
-	word := regexp.MustCompile(`\b(` + strings.Join(names, "|") + `)\b`)
-	for own, data := range types {
-		for _, m := range word.FindAll(data, -1) {
-			if string(m) != own {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// scanImports marks in needed the folders a QML file's header imports (qs.a.b and "relative/dir", as Quickshell's
-// scanner reads them) and its own folder when it is a singleton.
-func scanImports(data []byte, rel string, needed map[string]bool) {
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		switch {
-		case line == "pragma Singleton":
-			needed[rel] = true
-		case strings.HasPrefix(line, "import"):
-			if i := strings.Index(line, " qs."); i != -1 {
-				mod, _, _ := strings.Cut(line[i+4:], " ")
-				needed[strings.ReplaceAll(mod, ".", "/")] = true
-			} else if _, quoted, ok := strings.Cut(line, `"`); ok {
-				if dir, _, ok := strings.Cut(quoted, `"`); ok && !strings.HasSuffix(dir, ".js") {
-					if root, ok := strings.CutPrefix(dir, "root:"); ok {
-						needed[path.Clean(strings.TrimPrefix(root, "/"))] = true
-					} else {
-						needed[path.Join(rel, dir)] = true
-					}
-				}
-			}
-		case strings.Contains(line, "{"):
-			return
-		}
-	}
+	return first
 }
 
 // builtIn: a plugin the shell carries in its own tree (the families, until they move to the hub).
@@ -1159,7 +1095,7 @@ func (e *Env) Remove(ids []string) ([]Result, error) {
 			at := filepath.Join(e.Shell, r.Provides)
 			if dest, err := os.Readlink(at); err == nil && dest == e.target(r.Kind, id) {
 				os.Remove(at)
-				if err := e.writeScanIndex(); err != nil {
+				if err := e.writeQmldirs(); err != nil {
 					return results, err
 				}
 			}
