@@ -818,21 +818,23 @@ func (e *Env) link(id, provides, want string) error {
 	return nil
 }
 
-// ScanIndex is the shell-root file that imports every folder of every linked plugin: stock Quickshell only
-// registers folders an import reaches from the root (src/core/scan.cpp), and plugins are loaded by path.
+// ScanIndex is the shell-root file that imports the linked plugins' folders: stock Quickshell only registers
+// folders an import reaches from the root (src/core/scan.cpp), and plugins are loaded by path.
 const ScanIndex = "HubScan.qml"
 
 var qsImportPath = regexp.MustCompile(`^[A-Za-z0-9_/]+$`)
 
 // writeScanIndex rewrites ScanIndex from the links under modules/ (qs-rs reads folders itself; harmless there).
+// It names only the linked folders Quickshell must register: those some file imports, and those whose files use a
+// sibling's type (stock Quickshell serves files through qs:, so even a folder loaded by path needs its qmldir).
+// Every extra folder slows its scan for everyone, which checks each import against each folder seen (205 folders: 9 s).
 func (e *Env) writeScanIndex() error {
 	if e.Shell == "" {
 		return nil
 	}
-	folders := map[string]bool{}
-	// folders reached through a link, links inside linked plugins included (a component in a family)
-	var walk func(dir, rel string, linked bool, depth int)
-	walk = func(dir, rel string, linked bool, depth int) {
+	linked, needed := map[string]map[string][]byte{}, map[string]bool{}
+	var walk func(dir, rel string, isLinked bool, depth int)
+	walk = func(dir, rel string, isLinked bool, depth int) {
 		entries, err := os.ReadDir(dir)
 		if err != nil || depth > 16 {
 			return
@@ -841,25 +843,83 @@ func (e *Env) writeScanIndex() error {
 			name, sub := d.Name(), filepath.Join(dir, d.Name())
 			switch {
 			case d.Type()&os.ModeSymlink != 0:
+				// links inside linked plugins too (a component in a family)
 				if real, err := filepath.EvalSymlinks(sub); err == nil && isDir(real) {
 					walk(real, path.Join(rel, name), true, depth+1)
 				}
 			case d.IsDir():
-				walk(sub, path.Join(rel, name), linked, depth+1)
-			case linked && name[0] >= 'A' && name[0] <= 'Z' && strings.HasSuffix(name, ".qml") && qsImportPath.MatchString(rel):
-				folders[rel] = true
+				walk(sub, path.Join(rel, name), isLinked, depth+1)
+			case strings.HasSuffix(name, ".qml"):
+				data, err := os.ReadFile(sub)
+				if err != nil {
+					continue
+				}
+				if isLinked && name[0] >= 'A' && name[0] <= 'Z' && qsImportPath.MatchString(rel) {
+					if linked[rel] == nil {
+						linked[rel] = map[string][]byte{}
+					}
+					linked[rel][strings.TrimSuffix(name, ".qml")] = data
+				}
+				scanImports(data, rel, needed)
+			case strings.HasSuffix(name, ".qml.json"):
+				needed[rel] = true
 			}
 		}
 	}
 	walk(filepath.Join(e.Shell, "modules"), "modules", false, 0)
 	var b strings.Builder
-	b.WriteString("// Written by inir hub: imports every folder of every plugin it linked, so Quickshell registers their types.\n")
+	b.WriteString("// Written by inir hub: imports the plugin folders Quickshell has to register.\n")
 	b.WriteString("import QtQuick\n")
-	for _, dir := range slices.Sorted(maps.Keys(folders)) {
-		b.WriteString("import qs." + strings.ReplaceAll(dir, "/", ".") + "\n")
+	for _, dir := range slices.Sorted(maps.Keys(linked)) {
+		if needed[dir] || usesSibling(linked[dir]) {
+			b.WriteString("import qs." + strings.ReplaceAll(dir, "/", ".") + "\n")
+		}
 	}
 	b.WriteString("\nQtObject {}\n")
 	return writeAtomic(filepath.Join(e.Shell, ScanIndex), []byte(b.String()))
+}
+
+// usesSibling: a file of the folder names another of its types.
+func usesSibling(types map[string][]byte) bool {
+	if len(types) < 2 {
+		return false
+	}
+	names := slices.Sorted(maps.Keys(types))
+	for i := range names {
+		names[i] = regexp.QuoteMeta(names[i])
+	}
+	word := regexp.MustCompile(`\b(` + strings.Join(names, "|") + `)\b`)
+	for own, data := range types {
+		for _, m := range word.FindAll(data, -1) {
+			if string(m) != own {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// scanImports marks in needed the folders a QML file's header imports (qs.a.b and "relative/dir", as Quickshell's
+// scanner reads them) and its own folder when it is a singleton.
+func scanImports(data []byte, rel string, needed map[string]bool) {
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "pragma Singleton":
+			needed[rel] = true
+		case strings.HasPrefix(line, "import"):
+			if i := strings.Index(line, " qs."); i != -1 {
+				mod, _, _ := strings.Cut(line[i+4:], " ")
+				needed[strings.ReplaceAll(mod, ".", "/")] = true
+			} else if _, quoted, ok := strings.Cut(line, `"`); ok {
+				if dir, _, ok := strings.Cut(quoted, `"`); ok && !strings.HasSuffix(dir, ".js") {
+					needed[path.Join(rel, dir)] = true
+				}
+			}
+		case strings.Contains(line, "{"):
+			return
+		}
+	}
 }
 
 // builtIn: a plugin the shell carries in its own tree (the families, until they move to the hub).
