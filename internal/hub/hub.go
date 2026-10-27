@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	Official      = "https://snowarch.github.io/inir-hub/index.json"
+	Official      = "https://inir.space/hub/index.json"
 	DefaultMaxAge = 6 * time.Hour
 	// Cached never fetches; any other max age fetches a source whose copy is older.
 	Cached = time.Duration(-1)
