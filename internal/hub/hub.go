@@ -800,7 +800,8 @@ func (e *Env) link(id, provides, want string) error {
 	}
 	at := filepath.Join(e.Shell, provides)
 	if dest, err := os.Readlink(at); err == nil && dest == want {
-		return e.writeShellFiles()
+		e.refreshShellFiles()
+		return nil
 	}
 	tmp := at + ".hub-link"
 	os.Remove(tmp)
@@ -810,8 +811,16 @@ func (e *Env) link(id, provides, want string) error {
 	if err := os.Rename(tmp, at); err != nil {
 		return err
 	}
-	// a folder left without its qmldir costs stock Quickshell that folder's types; unlinking would cost the family
-	return e.writeShellFiles()
+	e.refreshShellFiles()
+	return nil
+}
+
+// refreshShellFiles runs writeShellFiles as a best effort: a folder left without its qmldir costs stock Quickshell
+// that folder's types, while failing the link would leave it unrecorded (and an update without its family).
+func (e *Env) refreshShellFiles() {
+	if err := e.writeShellFiles(); err != nil {
+		fmt.Fprintln(os.Stderr, "inir hub: couldn't write the shell's plugin files:", err)
+	}
 }
 
 // ScanIndex was a shell-root file importing every linked plugin folder so stock Quickshell scanned them; its scan
@@ -951,9 +960,7 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 			}
 			// a store copy from before plugins carried their qmldir gets them here
 			if kind.Plugin {
-				if err := e.writeShellFiles(); err != nil {
-					return results, err
-				}
+				e.refreshShellFiles()
 			}
 			results = append(results, Result{ID: id, Kind: kind.Name, Version: from})
 			continue
@@ -1112,9 +1119,7 @@ func (e *Env) Remove(ids []string) ([]Result, error) {
 			at := filepath.Join(e.Shell, r.Provides)
 			if dest, err := os.Readlink(at); err == nil && dest == e.target(r.Kind, id) {
 				os.Remove(at)
-				if err := e.writeShellFiles(); err != nil {
-					return results, err
-				}
+				e.refreshShellFiles()
 			}
 		}
 		if err := os.RemoveAll(e.target(r.Kind, id)); err != nil {
