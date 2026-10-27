@@ -811,7 +811,11 @@ func (e *Env) link(id, provides string) error {
 	if err := os.Rename(tmp, at); err != nil {
 		return err
 	}
-	return e.writeScanIndex()
+	if err := e.writeScanIndex(); err != nil {
+		os.Remove(at)
+		return err
+	}
+	return nil
 }
 
 // ScanIndex is the shell-root file that imports every folder of every linked plugin: stock Quickshell only
@@ -826,29 +830,28 @@ func (e *Env) writeScanIndex() error {
 		return nil
 	}
 	folders := map[string]bool{}
-	root := filepath.Join(e.Shell, "modules")
-	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.Type()&os.ModeSymlink == 0 || !isDir(p) {
-			return nil
+	// folders reached through a link, links inside linked plugins included (a component in a family)
+	var walk func(dir, rel string, linked bool, depth int)
+	walk = func(dir, rel string, linked bool, depth int) {
+		entries, err := os.ReadDir(dir)
+		if err != nil || depth > 16 {
+			return
 		}
-		link, _ := filepath.Rel(e.Shell, p)
-		real, err := filepath.EvalSymlinks(p)
-		if err != nil {
-			return nil
+		for _, d := range entries {
+			name, sub := d.Name(), filepath.Join(dir, d.Name())
+			switch {
+			case d.Type()&os.ModeSymlink != 0:
+				if real, err := filepath.EvalSymlinks(sub); err == nil && isDir(real) {
+					walk(real, path.Join(rel, name), true, depth+1)
+				}
+			case d.IsDir():
+				walk(sub, path.Join(rel, name), linked, depth+1)
+			case linked && name[0] >= 'A' && name[0] <= 'Z' && strings.HasSuffix(name, ".qml") && qsImportPath.MatchString(rel):
+				folders[rel] = true
+			}
 		}
-		filepath.WalkDir(real, func(q string, f os.DirEntry, err error) error {
-			if err != nil || f.IsDir() || !strings.HasSuffix(f.Name(), ".qml") || f.Name()[0] < 'A' || f.Name()[0] > 'Z' {
-				return nil
-			}
-			rel, _ := filepath.Rel(real, filepath.Dir(q))
-			dir := filepath.ToSlash(filepath.Join(link, rel))
-			if qsImportPath.MatchString(dir) {
-				folders[dir] = true
-			}
-			return nil
-		})
-		return nil
-	})
+	}
+	walk(filepath.Join(e.Shell, "modules"), "modules", false, 0)
 	var b strings.Builder
 	b.WriteString("// Written by inir hub: imports every folder of every plugin it linked, so Quickshell registers their types.\n")
 	b.WriteString("import QtQuick\n")
@@ -986,7 +989,9 @@ func (e *Env) Remove(ids []string) ([]Result, error) {
 			at := filepath.Join(e.Shell, r.Provides)
 			if dest, err := os.Readlink(at); err == nil && dest == e.target(r.Kind, id) {
 				os.Remove(at)
-				e.writeScanIndex()
+				if err := e.writeScanIndex(); err != nil {
+					return results, err
+				}
 			}
 		}
 		if err := os.RemoveAll(e.target(r.Kind, id)); err != nil {
