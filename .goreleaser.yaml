@@ -34,7 +34,7 @@ nfpms:
     homepage: https://github.com/snowarch/inir-cli
     maintainer: snowarch
     description: Command line for the iNiR desktop shell
-    license: GPL-3.0-or-later
+    license: GPL-3.0-only
     formats: [deb, rpm]
     bindir: /usr/lib/inir
 

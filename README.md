@@ -62,6 +62,6 @@ test/shells.py ./inir <iNiR checkout>                # Tab in real bash, zsh and
 INIR_SHELL_REPO=<checkout> go test ./internal/cli    # command table matches scripts/inir
 ```
 
-The doctor is held to the bash one by the shell repo's install bench:
-`dev/lifecycle/run.sh --cli ./inir --scenario update DISTRO` runs `inir doctor --check` before
-and after the bash doctor and fails on any step where they disagree.
+## License
+
+GPL-3.0, like iNiR, whose `scripts/inir` this started from (`LICENSE`).
