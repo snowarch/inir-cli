@@ -1007,7 +1007,8 @@ func (e *Env) Fetch(ids []string, version string) ([]Result, error) {
 }
 
 // LinkLocal links plugin folders of your own into the shell, to work on one: what you save shows on the next
-// reload. Nothing is recorded, so update and remove leave them alone; a hub install of the same id replaces the link.
+// reload. Nothing is recorded, so update and remove leave them alone, and a hub install of the same id refuses until
+// the link is gone.
 func (e *Env) LinkLocal(dirs []string) ([]Result, error) {
 	unlock, err := e.lock()
 	if err != nil {
