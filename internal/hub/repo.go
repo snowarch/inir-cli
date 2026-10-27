@@ -180,6 +180,30 @@ func kindOfDir(folder string) (Kind, bool) {
 	return Kind{}, false
 }
 
+// qmldirsWhole: stock Quickshell trusts a hand-written qmldir whole, so a type it leaves out is "not a type" for
+// everyone who runs Quickshell (qs-rs reads the folder and never shows it).
+func (r *Repo) qmldirsWhole(folder string) {
+	filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() != "qmldir" {
+			return nil
+		}
+		b, _ := os.ReadFile(p)
+		listed := map[string]bool{}
+		for _, line := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(line); len(f) > 0 && strings.HasSuffix(f[len(f)-1], ".qml") {
+				listed[f[len(f)-1]] = true
+			}
+		}
+		qmls, _ := filepath.Glob(filepath.Join(filepath.Dir(p), "[A-Z]*.qml"))
+		for _, q := range qmls {
+			if !listed[filepath.Base(q)] {
+				r.errorf(p, "lists no %s: Quickshell won't know that type", filepath.Base(q))
+			}
+		}
+		return nil
+	})
+}
+
 func filesOf(folder string) []string {
 	var out []string
 	filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error {
@@ -475,6 +499,7 @@ func (r *Repo) check(folder string) *entry {
 			r.errorf(hubFile, `"requires" lists the ids of the plugins it needs`)
 		}
 		e.item["surfaces"], e.item["icon"], e.item["provides"] = []string{"shell"}, orDefault(text(native, "icon"), "extension"), provides
+		r.qmldirsWhole(folder)
 		if len(needs) > 0 {
 			e.item["requires"] = needs
 		}

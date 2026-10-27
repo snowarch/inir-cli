@@ -23,6 +23,8 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   install ID...
   update [ID...]                        every update when no id is given
   remove ID...
+  fetch ID... [--for VERSION]           download into the cache only, checked against that iNiR version
+  link DIR...                           link a plugin folder of your own into the shell, to work on it
   open [ID]                             the Hub page in your family's Settings, at one item if given
   refresh | changed KIND                ask the running shell to read the hub again
 
@@ -51,7 +53,7 @@ func runHub(args []string) (int, bool) {
 		return 0, true
 	case "validate", "bumps", "new", "build", "preview":
 		return runHubRepo(verb, rest), true
-	case "status", "sources", "sync", "list", "search", "info", "install", "update", "remove":
+	case "status", "sources", "sync", "list", "search", "info", "install", "update", "remove", "fetch", "link":
 	default:
 		return 0, false
 	}
@@ -205,6 +207,29 @@ func hubClient(verb string, args []string, asJSON bool) (int, error) {
 		return 0, usageErr("inir hub %s ID...", verb)
 	case verb == "install":
 		results, err = env.Install(args)
+	case verb == "fetch":
+		version := ""
+		if i := slices.Index(args, "--for"); i >= 0 && i+1 < len(args) {
+			version, args = args[i+1], slices.Delete(slices.Clone(args), i, i+2)
+		}
+		if len(args) == 0 {
+			return 0, usageErr("inir hub fetch ID... [--for VERSION]")
+		}
+		// nothing installed yet, so the shell is not told
+		results, err := env.Fetch(args, version)
+		switch {
+		case err != nil:
+			return 0, err
+		case asJSON:
+			printJSON(map[string]any{"ok": true, "results": append([]hub.Result{}, results...)})
+		default:
+			for _, r := range results {
+				fmt.Printf("fetched %s %s\n", r.ID, r.Version)
+			}
+		}
+		return 0, nil
+	case verb == "link":
+		results, err = env.LinkLocal(args)
 	default:
 		results, err = env.Remove(args)
 	}

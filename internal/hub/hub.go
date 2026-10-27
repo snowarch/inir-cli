@@ -768,7 +768,7 @@ func (e *Env) place(item Item, kind Kind, data []byte) (string, error) {
 		return "", err
 	}
 	if kind.Plugin {
-		if err := e.link(id, str(item, "provides")); err != nil {
+		if err := e.link(id, str(item, "provides"), target); err != nil {
 			os.RemoveAll(target)
 			if exists(old) {
 				os.Rename(old, target)
@@ -795,11 +795,11 @@ func (e *Env) canLink(id, provides string) error {
 }
 
 // link puts a plugin at its shell path (a family at modules/<id>), so the shell imports it as if it were in the tree.
-func (e *Env) link(id, provides string) error {
+func (e *Env) link(id, provides, want string) error {
 	if err := e.canLink(id, provides); err != nil {
 		return err
 	}
-	at, want := filepath.Join(e.Shell, provides), e.target("family", id)
+	at := filepath.Join(e.Shell, provides)
 	if dest, err := os.Readlink(at); err == nil && dest == want {
 		return e.writeScanIndex()
 	}
@@ -920,6 +920,14 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 		}
 		from := str(item, "installed")
 		if from != "" && item["update"] != true {
+			// a rollback or a fresh copy of the runtime took the link away; the store still has it
+			if at := filepath.Join(e.Shell, str(item, "provides")); kind.Plugin && e.Shell != "" && !exists(at) {
+				if err := e.link(id, str(item, "provides"), e.target(kind.Name, id)); err != nil {
+					return results, err
+				}
+				results = append(results, Result{ID: id, Kind: kind.Name, Version: from, Changed: true, From: from, Path: e.target(kind.Name, id)})
+				continue
+			}
 			results = append(results, Result{ID: id, Kind: kind.Name, Version: from})
 			continue
 		}
@@ -943,6 +951,93 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 			return results, err
 		}
 		results = append(results, Result{ID: id, Kind: kind.Name, Version: str(item, "version"), Changed: true, From: from, Path: at})
+	}
+	return results, nil
+}
+
+// Fetch puts each id and what it needs in the cache, checked against the iNiR version they are for: setup fetches
+// the families before it syncs a new base, so nothing is switched until everything is in hand.
+func (e *Env) Fetch(ids []string, version string) ([]Result, error) {
+	unlock, err := e.lock()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	if version != "" {
+		e.Version = version
+	}
+	raw, _ := e.Catalogue(0)
+	items := e.Annotate(raw)
+	var results []Result
+	seen := map[string]bool{}
+	var get func(id string) error
+	get = func(id string) error {
+		if seen[id] {
+			return nil
+		}
+		seen[id] = true
+		item, err := find(id, items)
+		if err != nil {
+			return err
+		}
+		kind, _ := KindOf(str(item, "kind"))
+		switch {
+		case item["orphan"] == true:
+			return fail(ExitUnknown, "%s is no longer listed in any hub source", id)
+		case item["compatible"] != true:
+			return fail(ExitIncompatible, "%s needs iNiR %s (this is %s)", str(item, "name"), str(item, "minInir"), e.Version)
+		}
+		for _, need := range strs(item, "requires") {
+			if err := get(need); err != nil {
+				return err
+			}
+		}
+		if _, err := e.download(item, kind); err != nil {
+			return err
+		}
+		results = append(results, Result{ID: id, Kind: kind.Name, Version: str(item, "version")})
+		return nil
+	}
+	for _, id := range ids {
+		if err := get(id); err != nil {
+			return results, err
+		}
+	}
+	return results, nil
+}
+
+// LinkLocal links plugin folders of your own into the shell, to work on one: what you save shows on the next
+// reload. Nothing is recorded, so update and remove leave them alone; a hub install of the same id replaces the link.
+func (e *Env) LinkLocal(dirs []string) ([]Result, error) {
+	unlock, err := e.lock()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	var results []Result
+	for _, dir := range dirs {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return results, err
+		}
+		var native struct{ ID, Kind, Version, Provides string }
+		b, err := os.ReadFile(filepath.Join(abs, "plugin.json"))
+		if err != nil || json.Unmarshal(b, &native) != nil {
+			return results, fail(ExitError, "%s has no readable plugin.json", dir)
+		}
+		if k, ok := KindOf(native.Kind); !ok || !k.Plugin || !pluginIDRE.MatchString(native.ID) {
+			return results, fail(ExitError, "%s: plugin.json needs an id and a plugin kind (family, component, design)", dir)
+		}
+		if native.Provides == "" {
+			native.Provides = "modules/" + native.ID
+		}
+		if !validProvides(native.Provides) {
+			return results, fail(ExitError, "%s: \"provides\" is where it lives in the shell, e.g. \"modules/%s\"", dir, native.ID)
+		}
+		if err := e.link(native.ID, native.Provides, abs); err != nil {
+			return results, err
+		}
+		results = append(results, Result{ID: native.ID, Kind: native.Kind, Version: native.Version, Changed: true, Path: abs})
 	}
 	return results, nil
 }
