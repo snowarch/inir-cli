@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -800,14 +801,62 @@ func (e *Env) link(id, provides string) error {
 	}
 	at, want := filepath.Join(e.Shell, provides), e.target("family", id)
 	if dest, err := os.Readlink(at); err == nil && dest == want {
-		return nil
+		return e.writeScanIndex()
 	}
 	tmp := at + ".hub-link"
 	os.Remove(tmp)
 	if err := os.Symlink(want, tmp); err != nil {
 		return err
 	}
-	return os.Rename(tmp, at)
+	if err := os.Rename(tmp, at); err != nil {
+		return err
+	}
+	return e.writeScanIndex()
+}
+
+// ScanIndex is the shell-root file that imports every folder of every linked plugin: stock Quickshell only
+// registers folders an import reaches from the root (src/core/scan.cpp), and plugins are loaded by path.
+const ScanIndex = "HubScan.qml"
+
+var qsImportPath = regexp.MustCompile(`^[A-Za-z0-9_/]+$`)
+
+// writeScanIndex rewrites ScanIndex from the links under modules/ (qs-rs reads folders itself; harmless there).
+func (e *Env) writeScanIndex() error {
+	if e.Shell == "" {
+		return nil
+	}
+	folders := map[string]bool{}
+	root := filepath.Join(e.Shell, "modules")
+	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.Type()&os.ModeSymlink == 0 || !isDir(p) {
+			return nil
+		}
+		link, _ := filepath.Rel(e.Shell, p)
+		real, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			return nil
+		}
+		filepath.WalkDir(real, func(q string, f os.DirEntry, err error) error {
+			if err != nil || f.IsDir() || !strings.HasSuffix(f.Name(), ".qml") || f.Name()[0] < 'A' || f.Name()[0] > 'Z' {
+				return nil
+			}
+			rel, _ := filepath.Rel(real, filepath.Dir(q))
+			dir := filepath.ToSlash(filepath.Join(link, rel))
+			if qsImportPath.MatchString(dir) {
+				folders[dir] = true
+			}
+			return nil
+		})
+		return nil
+	})
+	var b strings.Builder
+	b.WriteString("// Written by inir hub: imports every folder of every plugin it linked, so Quickshell registers their types.\n")
+	b.WriteString("import QtQuick\n")
+	for _, dir := range slices.Sorted(maps.Keys(folders)) {
+		b.WriteString("import qs." + strings.ReplaceAll(dir, "/", ".") + "\n")
+	}
+	b.WriteString("\nQtObject {}\n")
+	return writeAtomic(filepath.Join(e.Shell, ScanIndex), []byte(b.String()))
 }
 
 // builtIn: a plugin the shell carries in its own tree (the families, until they move to the hub).
@@ -937,6 +986,7 @@ func (e *Env) Remove(ids []string) ([]Result, error) {
 			at := filepath.Join(e.Shell, r.Provides)
 			if dest, err := os.Readlink(at); err == nil && dest == e.target(r.Kind, id) {
 				os.Remove(at)
+				e.writeScanIndex()
 			}
 		}
 		if err := os.RemoveAll(e.target(r.Kind, id)); err != nil {
