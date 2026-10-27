@@ -800,7 +800,7 @@ func (e *Env) link(id, provides, want string) error {
 	}
 	at := filepath.Join(e.Shell, provides)
 	if dest, err := os.Readlink(at); err == nil && dest == want {
-		return e.writeQmldirs()
+		return e.writeShellFiles()
 	}
 	tmp := at + ".hub-link"
 	os.Remove(tmp)
@@ -810,11 +810,8 @@ func (e *Env) link(id, provides, want string) error {
 	if err := os.Rename(tmp, at); err != nil {
 		return err
 	}
-	if err := e.writeQmldirs(); err != nil {
-		os.Remove(at)
-		return err
-	}
-	return nil
+	// a folder left without its qmldir costs stock Quickshell that folder's types; unlinking would cost the family
+	return e.writeShellFiles()
 }
 
 // ScanIndex was a shell-root file importing every linked plugin folder so stock Quickshell scanned them; its scan
@@ -823,10 +820,14 @@ const ScanIndex = "HubScan.qml"
 
 var qsImportPath = regexp.MustCompile(`^[A-Za-z0-9_/]+$`)
 
-// writeQmldirs gives every linked folder that holds types and has no qmldir the one Quickshell would synthesize,
-// so stock Quickshell finds them without scanning (hub plugins ship theirs; this covers older and local ones), and
-// removes the old scan index. qs-rs reads folders itself either way.
-func (e *Env) writeQmldirs() error {
+// PluginList names the plugins at modules/<id>, one per line, so the shell reads their plugin.json at once on start
+// instead of waiting for its folder model (services/Plugins.qml). Not QML: Quickshell's scan never reads it.
+const PluginList = "plugins.list"
+
+// writeShellFiles gives every linked folder that holds types and has no qmldir the one Quickshell would synthesize,
+// so stock Quickshell finds them without scanning (hub plugins ship theirs; this covers older and local ones),
+// rewrites PluginList and removes the old scan index. qs-rs reads folders itself either way.
+func (e *Env) writeShellFiles() error {
 	if e.Shell == "" {
 		return nil
 	}
@@ -866,6 +867,16 @@ func (e *Env) writeQmldirs() error {
 		}
 	}
 	walk(filepath.Join(e.Shell, "modules"), "modules", false, 0)
+	var ids strings.Builder
+	tops, _ := os.ReadDir(filepath.Join(e.Shell, "modules"))
+	for _, d := range tops {
+		if qsImportPath.MatchString(d.Name()) && exists(filepath.Join(e.Shell, "modules", d.Name(), "plugin.json")) {
+			ids.WriteString(d.Name() + "\n")
+		}
+	}
+	if err := writeAtomic(filepath.Join(e.Shell, PluginList), []byte(ids.String())); err != nil && first == nil {
+		first = err
+	}
 	if b, err := os.ReadFile(filepath.Join(e.Shell, ScanIndex)); err == nil && strings.HasPrefix(string(b), "// Written by inir hub") {
 		os.Remove(filepath.Join(e.Shell, ScanIndex))
 	}
@@ -937,6 +948,12 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 				}
 				results = append(results, Result{ID: id, Kind: kind.Name, Version: from, Changed: true, From: from, Path: e.target(kind.Name, id)})
 				continue
+			}
+			// a store copy from before plugins carried their qmldir gets them here
+			if kind.Plugin {
+				if err := e.writeShellFiles(); err != nil {
+					return results, err
+				}
 			}
 			results = append(results, Result{ID: id, Kind: kind.Name, Version: from})
 			continue
@@ -1095,7 +1112,7 @@ func (e *Env) Remove(ids []string) ([]Result, error) {
 			at := filepath.Join(e.Shell, r.Provides)
 			if dest, err := os.Readlink(at); err == nil && dest == e.target(r.Kind, id) {
 				os.Remove(at)
-				if err := e.writeQmldirs(); err != nil {
+				if err := e.writeShellFiles(); err != nil {
 					return results, err
 				}
 			}

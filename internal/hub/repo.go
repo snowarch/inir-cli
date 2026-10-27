@@ -209,21 +209,23 @@ func (r *Repo) qmldirsWhole(folder, provides string) {
 			}
 			return nil
 		}
-		listed := map[string]bool{}
+		listed := map[string][2]bool{}
 		for _, line := range strings.Split(string(b), "\n") {
 			if f := strings.Fields(line); len(f) > 0 && strings.HasSuffix(f[len(f)-1], ".qml") {
-				listed[f[len(f)-1]] = slices.Contains(f, "singleton")
+				listed[f[len(f)-1]] = [2]bool{slices.Contains(f, "internal"), slices.Contains(f, "singleton")}
 			}
 		}
 		for _, q := range qmls {
 			name := filepath.Base(q)
-			single, ok := listed[name]
-			_, pragma := qmlPragmas(q)
+			line, ok := listed[name]
+			internal, single := qmlPragmas(q)
 			switch {
 			case !ok:
 				r.errorf(at, "lists no %s: Quickshell won't know that type", name)
-			case single != pragma:
-				r.errorf(at, "%s is %s in its file: its qmldir line says otherwise", name, map[bool]string{true: "a singleton", false: "not a singleton"}[pragma])
+			case line[1] != single:
+				r.errorf(at, "%s is %s in its file: its qmldir line says otherwise", name, map[bool]string{true: "a singleton", false: "not a singleton"}[single])
+			case line[0] != internal:
+				r.errorf(at, "%s is %s in its file: its qmldir line says otherwise", name, map[bool]string{true: "internal", false: "not internal"}[internal])
 			}
 		}
 		return nil
