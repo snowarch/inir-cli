@@ -106,6 +106,10 @@ func Update(args []string) int {
 	case model.Stopped:
 		s.b.WriteString(s.bold.Render("Update stopped.") + "\n")
 		s.b.WriteString(s.muted.Render("Undo what already ran with ./setup rollback, or run inir update again.") + "\n")
+	case (s.failed != nil || model.Err != nil) && wentBack(run.Log):
+		// setup already put the old version back (rc 24); a rollback hint would undo nothing
+		s.b.WriteString(s.bold.Render("The new version did not load, so iNiR went back to the one you had.") + "\n")
+		s.b.WriteString(s.muted.Render("inir update tries it again; inir logs shows what failed.") + "\n")
 	case s.failed != nil || model.Err != nil:
 		where := ""
 		if s.failed != nil {
@@ -145,6 +149,13 @@ func Update(args []string) int {
 		}
 	}
 	return s.print(model, run.Log)
+}
+
+// setup's last words: the "Update not applied" alert, whose message names ./setup rollback only when it couldn't go back
+func wentBack(log string) bool {
+	tail := lastLines(log, 6)
+	i := slices.IndexFunc(tail, func(l string) bool { return strings.Contains(l, "Update not applied") })
+	return i >= 0 && !slices.ContainsFunc(tail[i:], func(l string) bool { return strings.Contains(l, "setup rollback") })
 }
 
 // Version is the checkout's VERSION, as setup reads it.
