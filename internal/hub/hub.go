@@ -841,20 +841,30 @@ func (e *Env) writeScanIndex() error {
 		}
 		for _, d := range entries {
 			name, sub := d.Name(), filepath.Join(dir, d.Name())
-			switch {
-			case d.Type()&os.ModeSymlink != 0:
-				// links inside linked plugins too (a component in a family)
-				if real, err := filepath.EvalSymlinks(sub); err == nil && isDir(real) {
-					walk(real, path.Join(rel, name), true, depth+1)
+			fileLinked := isLinked
+			if d.Type()&os.ModeSymlink != 0 {
+				real, err := filepath.EvalSymlinks(sub)
+				if err != nil {
+					continue
 				}
+				if isDir(real) {
+					// links inside linked plugins too (a component in a family)
+					walk(real, path.Join(rel, name), true, depth+1)
+					continue
+				}
+				fileLinked = true
+			}
+			switch {
 			case d.IsDir():
 				walk(sub, path.Join(rel, name), isLinked, depth+1)
 			case strings.HasSuffix(name, ".qml"):
 				data, err := os.ReadFile(sub)
 				if err != nil {
+					// unread is unknown: name the folder rather than risk a missing type
+					needed[rel] = true
 					continue
 				}
-				if isLinked && name[0] >= 'A' && name[0] <= 'Z' && qsImportPath.MatchString(rel) {
+				if fileLinked && name[0] >= 'A' && name[0] <= 'Z' && qsImportPath.MatchString(rel) {
 					if linked[rel] == nil {
 						linked[rel] = map[string][]byte{}
 					}
@@ -913,7 +923,11 @@ func scanImports(data []byte, rel string, needed map[string]bool) {
 				needed[strings.ReplaceAll(mod, ".", "/")] = true
 			} else if _, quoted, ok := strings.Cut(line, `"`); ok {
 				if dir, _, ok := strings.Cut(quoted, `"`); ok && !strings.HasSuffix(dir, ".js") {
-					needed[path.Join(rel, dir)] = true
+					if root, ok := strings.CutPrefix(dir, "root:"); ok {
+						needed[path.Clean(strings.TrimPrefix(root, "/"))] = true
+					} else {
+						needed[path.Join(rel, dir)] = true
+					}
 				}
 			}
 		case strings.Contains(line, "{"):
