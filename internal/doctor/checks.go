@@ -97,6 +97,17 @@ func (c *checker) repoRoot() string {
 
 type dep struct{ cmd, name string }
 
+// powerProfilesWanted is power_profiles_wanted (sdata/lib/package-installers.sh): no daemon installed and
+// nothing else managing power, whose tools conflict with it.
+func powerProfilesWanted() bool {
+	for _, m := range []string{"powerprofilesctl", "tuned-adm", "tlp", "auto-cpufreq", "system76-power"} {
+		if lookPath(m) != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // Dependencies is check_dependencies' command list, in its order.
 var Dependencies = []dep{
 	{"qs", "Quickshell"}, {"niri", "Niri"}, {"nmcli", "NetworkManager"}, {"wpctl", "WirePlumber"},
@@ -146,6 +157,13 @@ func (c *checker) dependencies(s *step) {
 	for _, d := range cmds {
 		if lookPath(d.cmd) == "" {
 			missing(d.name, d.cmd)
+		}
+	}
+	// the profile buttons' daemon where nothing manages power yet; Void lists it above
+	switch c.e.OS {
+	case "arch", "fedora", "debian", "ubuntu":
+		if powerProfilesWanted() {
+			missing("power-profiles-daemon", "power-profiles")
 		}
 	}
 
