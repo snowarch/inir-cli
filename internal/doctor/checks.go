@@ -181,6 +181,15 @@ func (c *checker) dependencies(s *step) {
 			missing("power-profiles-daemon", "power-profiles")
 		}
 	}
+	// the venv builds pycairo and pygobject; Debian and Ubuntu ship their headers apart
+	if c.e.OS == "debian" || c.e.OS == "ubuntu" {
+		if _, code := run(10*time.Second, "pkg-config", "--exists", "cairo"); code != 0 {
+			missing("Cairo headers", "cairo-headers")
+		}
+		if _, code := run(10*time.Second, "pkg-config", "--exists", "girepository-2.0"); code != 0 {
+			missing("GObject headers", "gi-headers")
+		}
+	}
 
 	if c.e.OS == "void" {
 		webengine, layershell := false, false
