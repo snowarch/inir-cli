@@ -182,6 +182,14 @@ func TestOwnRuntime(t *testing.T) {
 	}
 	want(t, "starts", checkStep(c, 15), StatusPass)
 	want(t, "polkit", checkStep(c, 16), StatusPass)
+	// the Web Apps tab turned on: Qt WebEngine is wanted over qs-rs 0.1.0
+	write(t, filepath.Join(e.RepoRoot, "shell.qml"), "", 0o644)
+	write(t, filepath.Join(e.RepoRoot, "sdata", "prebuilt.json"), `{"parts":{"qs-rs-webengine":{"dest":"runtime","with":"qs-rs","when":"sidebar.plugins.enable","title":"Qt WebEngine","version":"0.1.0","sha256":"ab"}}}`, 0o644)
+	write(t, filepath.Join(e.ConfDir, "config.json"), `{"sidebar":{"plugins":{"enable":true}}}`, 0o644)
+	write(t, filepath.Join(runtime, "0.1.0", ".sha256"), "cd\n", 0o644)
+	want(t, "add-on missing", checkStep(c, 15), StatusFixable)
+	write(t, filepath.Join(runtime, "0.1.0", ".qs-rs-webengine.sha256"), "ab\n", 0o644)
+	want(t, "add-on in", checkStep(c, 15), StatusPass)
 	write(t, filepath.Join(runtime, "0.1.0", "bin", "qs"), "#!/bin/sh\nexit 1\n", 0o755)
 	want(t, "won't start", checkStep(c, 15), StatusFixable)
 	os.RemoveAll(filepath.Join(runtime, "0.1.0"))

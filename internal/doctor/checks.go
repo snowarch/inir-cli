@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"sort"
 	"strings"
 	"time"
@@ -1020,6 +1021,46 @@ func (c *checker) accelHooksOK() bool {
 	return true
 }
 
+// pendingAddons is prebuilt_pending_addons: the titles of the add-ons this machine takes (their
+// "when" config key is true) whose part is unpacked and they are not.
+func (c *checker) pendingAddons() []string {
+	if goruntime.GOARCH != "amd64" || (c.e.Getenv("INIR_PREBUILT") != "" && c.e.Getenv("INIR_PREBUILT") != "1") {
+		return nil
+	}
+	var pins struct {
+		Parts map[string]struct{ Dest, With, When, Title, Version, Sha256 string } `json:"parts"`
+	}
+	if c.repoRoot() == "" || !readJSON(filepath.Join(c.repoRoot(), "sdata", "prebuilt.json"), &pins) {
+		return nil
+	}
+	var cfg map[string]any
+	readJSON(filepath.Join(c.e.ConfDir, "config.json"), &cfg)
+	var out []string
+	for name, p := range pins.Parts {
+		if p.With == "" || p.When == "" || p.Sha256 == "" {
+			continue
+		}
+		var v any = cfg
+		for _, k := range strings.Split(p.When, ".") {
+			m, _ := v.(map[string]any)
+			v = m[k]
+		}
+		dir := filepath.Join(c.e.DataHome, "inir", p.Dest, p.Version)
+		if v != true || !isFile(filepath.Join(dir, ".sha256")) {
+			continue
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, "."+name+".sha256")); strings.TrimSpace(string(b)) == p.Sha256 {
+			continue
+		}
+		if p.Title == "" {
+			p.Title = name
+		}
+		out = append(out, p.Title)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // ownRuntime is runtime/current when setup put qs-rs there (sdata/lib/prebuilt.sh): the
 // launcher starts it before any qs in PATH, and it carries its own Qt.
 func (c *checker) ownRuntime() string {
@@ -1034,6 +1075,9 @@ func (c *checker) qtABI(s *step) {
 		ver, _ := os.Readlink(own)
 		if _, code := runEnv(20*time.Second, []string{"QT_QPA_PLATFORM=offscreen"}, filepath.Join(own, "bin", "qs"), "--version"); code == 0 {
 			s.pass("qs-rs " + ver + " runs on its own Qt")
+			if addons := strings.Join(c.pendingAddons(), ", "); addons != "" {
+				s.fixable("Missing: "+addons, "Got "+addons)
+			}
 			return
 		}
 		s.fixable("qs-rs "+ver+" does not start here",

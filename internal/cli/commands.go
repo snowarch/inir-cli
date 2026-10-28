@@ -103,6 +103,7 @@ var Commands = []Command{
 	{Name: "migrate", Desc: "Review and apply config migrations"},
 	{Name: "rollback", Desc: "Restore a previous snapshot"},
 	{Name: "my-changes", Desc: "View or restore your preserved changes"},
+	{Name: "webengine", Desc: "Get Qt WebEngine for the Web Apps tab"},
 	{Name: "uninstall", Desc: "Remove iNiR from the system"},
 	{Name: "config", Desc: "View and edit shell settings"},
 	{Name: "info", Desc: "System and shell details"},
