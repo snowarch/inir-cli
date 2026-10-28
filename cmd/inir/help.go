@@ -28,7 +28,7 @@ var helpGroups = []struct {
 	{"shell", "The shell", []string{"start", "stop", "restart", "kill", "open", "repair", "settings-window", "waffle-settings-window"}},
 	{"yours", "Make it yours", []string{"theme", "look", "hub", "bind", "config", "completions", "hook"}},
 	{"apps", "Open things", []string{"terminal", "browser", "colorpicker", "close-window"}},
-	{"keep", "Install and keep", []string{"install", "reinstall", "migrate", "rollback", "my-changes", "backup", "uninstall", "deps", "webengine"}},
+	{"keep", "Install and keep", []string{"install", "reinstall", "rollback", "my-changes", "backup", "uninstall", "deps", "webengine"}},
 	{"hood", "Under the hood", []string{"ipc", "service", "info", "version", "setup", "path", "dev", "cli"}},
 }
 

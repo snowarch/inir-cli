@@ -114,7 +114,7 @@ func TestUpdateStagesFollowSetup(t *testing.T) {
 	run(m,
 		EventMsg{"ok", "Synced 1247 files"},
 		EventMsg{"stage", "3"},
-		EventMsg{"warn", "2 optional migration(s) available"},
+		EventMsg{"warn", "Could not refresh the inir launcher"},
 		EventMsg{"stage", "7"},
 	)
 	s := m.Stages()
@@ -122,7 +122,7 @@ func TestUpdateStagesFollowSetup(t *testing.T) {
 		t.Fatalf("pull %v, sync %v %q", s[0].Status, s[1].Status, s[1].Last)
 	}
 	if len(s[2].Warnings) != 1 || s[3].Status != Skipped || s[6].Status != Running {
-		t.Fatalf("migrations %v, finalizing %v, restart %v", s[2].Warnings, s[3].Status, s[6].Status)
+		t.Fatalf("setup check %v, finalizing %v, restart %v", s[2].Warnings, s[3].Status, s[6].Status)
 	}
 	m.Update(DoneMsg{})
 	view := ansi.Strip(m.View().Content)

@@ -51,7 +51,7 @@ func UpdateStages() []*Stage {
 	return []*Stage{
 		{Key: "1", Title: "Pulling changes", Expected: 2 * time.Second},
 		{Key: "2", Title: "Syncing files", Expected: 3 * time.Second},
-		{Key: "3", Title: "Running migrations", Expected: time.Second},
+		{Key: "3", Title: "Checking your setup", Expected: time.Second},
 		{Key: "4", Title: "Finalizing", Expected: time.Second},
 		{Key: "5", Title: "Checking dependencies", Expected: 2 * time.Second},
 		{Key: "6", Title: "Python packages", Expected: 2 * time.Second},

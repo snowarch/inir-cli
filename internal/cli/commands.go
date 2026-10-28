@@ -100,7 +100,6 @@ var Commands = []Command{
 		{Name: "--realign", Desc: "Realign an old checkout after rewritten history"},
 		{Name: "--dry-run", Desc: "Say what would change, change nothing"},
 		help}},
-	{Name: "migrate", Desc: "Review and apply config migrations"},
 	{Name: "rollback", Desc: "Restore a previous snapshot"},
 	{Name: "my-changes", Desc: "View or restore your preserved changes"},
 	{Name: "webengine", Desc: "Get Qt WebEngine for the Web Apps tab"},
