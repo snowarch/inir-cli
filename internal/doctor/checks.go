@@ -97,15 +97,30 @@ func (c *checker) repoRoot() string {
 
 type dep struct{ cmd, name string }
 
-// powerProfilesWanted is power_profiles_wanted (sdata/lib/package-installers.sh): no daemon installed and
-// nothing else managing power, whose tools conflict with it.
+// powerProfilesWanted is power_profiles_wanted (sdata/lib/package-installers.sh): no daemon on the system bus
+// and nothing else managing power, whose tools conflict with it.
 func powerProfilesWanted() bool {
-	for _, m := range []string{"powerprofilesctl", "tuned-adm", "tlp", "auto-cpufreq", "system76-power"} {
+	for _, m := range []string{"tuned-adm", "tlp", "auto-cpufreq", "system76-power"} {
 		if lookPath(m) != "" {
 			return false
 		}
 	}
-	return true
+	return !powerProfilesOnBus()
+}
+
+// powerProfilesOnBus is power_profiles_on_bus: the name Quickshell asks for is owned or startable.
+func powerProfilesOnBus() bool {
+	if lookPath("gdbus") == "" {
+		return lookPath("powerprofilesctl") != ""
+	}
+	for _, m := range []string{"ListNames", "ListActivatableNames"} {
+		out, _ := stdout(5*time.Second, "gdbus", "call", "--system", "--dest", "org.freedesktop.DBus",
+			"--object-path", "/org/freedesktop/DBus", "--method", "org.freedesktop.DBus."+m)
+		if strings.Contains(out, "'org.freedesktop.UPower.PowerProfiles'") {
+			return true
+		}
+	}
+	return false
 }
 
 // Dependencies is check_dependencies' command list, in its order.
