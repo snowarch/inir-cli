@@ -1004,8 +1004,8 @@ func ABIMismatch() string {
 	return ""
 }
 
-// _PREBUILT_GO in sdata/lib/prebuilt.sh: the Go helpers inir-accel answers for
-var accelGo = []string{"inir-washi", "inir-opencode-themegen", "inir-vscode-themegen"}
+// _PREBUILT_GO in sdata/lib/prebuilt.sh: the helpers v2.33 compiled from Go, inir-accel's now
+var accelGo = []string{"inir-washi", "inir-opencode-themegen", "inir-vscode-themegen", "inir-zed-themegen"}
 
 // accelHooksOK is prebuilt_accel_hooks_ok: the hooks point at accel/current while it is
 // there, and none is left pointing at it once it went.

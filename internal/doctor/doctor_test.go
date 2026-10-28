@@ -216,7 +216,11 @@ func TestAccelHooks(t *testing.T) {
 		t.Fatal("accel there, no hooks")
 	}
 	os.Remove(filepath.Join(venv, "python3"))
-	for _, h := range append([]string{filepath.Join(venv, "python3")}, filepath.Join(gen, accelGo[0]), filepath.Join(gen, accelGo[1]), filepath.Join(gen, accelGo[2])) {
+	hooks := []string{filepath.Join(venv, "python3")}
+	for _, g := range accelGo {
+		hooks = append(hooks, filepath.Join(gen, g))
+	}
+	for _, h := range hooks {
 		os.Symlink(bin, h)
 	}
 	if !c.accelHooksOK() {
