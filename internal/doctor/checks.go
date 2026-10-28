@@ -189,6 +189,9 @@ func (c *checker) dependencies(s *step) {
 		if _, code := run(10*time.Second, "pkg-config", "--exists", "girepository-2.0"); code != 0 {
 			missing("GObject headers", "gi-headers")
 		}
+		if _, code := run(10*time.Second, "pkg-config", "--exists", "dbus-1"); code != 0 {
+			missing("D-Bus headers", "dbus-headers")
+		}
 	}
 
 	if c.e.OS == "void" {
