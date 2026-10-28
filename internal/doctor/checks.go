@@ -281,7 +281,7 @@ func (c *checker) fonts(s *step) {
 		}
 	}
 	if cfg := filepath.Join(c.e.ConfDir, "config.json"); isFile(cfg) && c.jq {
-		for _, f := range configuredFonts(cfg) {
+		for _, f := range configuredFonts(cfg, c.e.RuntimeDir) {
 			switch strings.ToLower(f) {
 			case "sans", "sans-serif", "serif", "monospace", "system-ui", "auto":
 				continue
@@ -342,29 +342,43 @@ func (c *checker) fonts(s *step) {
 	}
 }
 
-// configuredFonts is the jq query of check_fonts, sorted and unique.
-func configuredFonts(path string) []string {
-	var cfg struct {
-		Appearance struct {
-			Typography map[string]any `json:"typography"`
-		} `json:"appearance"`
-		Waffles struct {
-			Theming struct {
-				Font map[string]any `json:"font"`
-			} `json:"theming"`
-		} `json:"waffles"`
-	}
+// configuredFonts is the jq query of check_fonts, sorted and unique: Material's fonts from
+// the base config, every other family's from the key its plugin.json names (settings.font),
+// or the font it falls back to when that key is unset.
+func configuredFonts(path, runtime string) []string {
+	var cfg map[string]any
 	if !readJSON(path, &cfg) {
 		return nil
 	}
-	set := map[string]bool{}
-	for _, k := range []string{"mainFont", "titleFont", "monospaceFont"} {
-		if v, ok := cfg.Appearance.Typography[k].(string); ok && v != "" {
-			set[v] = true
+	type font struct {
+		Key      string
+		Fallback any
+	}
+	keys := []font{{Key: "appearance.typography.mainFont"}, {Key: "appearance.typography.titleFont"}, {Key: "appearance.typography.monospaceFont"}}
+	manifests, _ := filepath.Glob(filepath.Join(runtime, "modules", "*", "plugin.json"))
+	for _, m := range manifests {
+		var p struct {
+			Settings struct {
+				Font font `json:"font"`
+			} `json:"settings"`
+		}
+		if runtime != "" && readJSON(m, &p) && p.Settings.Font.Key != "" {
+			keys = append(keys, p.Settings.Font)
 		}
 	}
-	if v, ok := cfg.Waffles.Theming.Font["family"].(string); ok && v != "" {
-		set[v] = true
+	set := map[string]bool{}
+	for _, k := range keys {
+		var v any = cfg
+		for _, part := range strings.Split(k.Key, ".") {
+			m, _ := v.(map[string]any)
+			v = m[part]
+		}
+		if s, ok := v.(string); !ok || s == "" {
+			v = k.Fallback
+		}
+		if s, ok := v.(string); ok && s != "" {
+			set[s] = true
+		}
 	}
 	var out []string
 	for f := range set {

@@ -3,6 +3,7 @@ package doctor
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -216,5 +217,23 @@ func TestAccelHooks(t *testing.T) {
 	os.Remove(filepath.Join(accel, "current"))
 	if c.accelHooksOK() {
 		t.Fatal("accel gone, hooks left")
+	}
+}
+
+func TestConfiguredFontsFromFamilies(t *testing.T) {
+	e, _ := fixture(t)
+	write(t, filepath.Join(e.RuntimeDir, "modules", "iris", "plugin.json"), `{"settings":{"font":{"key":"iris.appearance.fontFamily","fallback":"Geist"}}}`, 0o644)
+	write(t, filepath.Join(e.RuntimeDir, "modules", "waffle", "plugin.json"), `{"settings":{"font":{"key":"waffles.theming.font.family","fallback":"Noto Sans"}}}`, 0o644)
+	cfg := filepath.Join(e.ConfDir, "config.json")
+	write(t, cfg, `{"appearance":{"typography":{"mainFont":"Roboto Flex"}},"iris":{"appearance":{"fontFamily":""}},"waffles":{"theming":{"font":{"family":"Segoe"}}}}`, 0o644)
+	// iRiS has no font set: the one it falls back to is the one it shows
+	if got := strings.Join(configuredFonts(cfg, e.RuntimeDir), ","); got != "Geist,Roboto Flex,Segoe" {
+		t.Fatalf("got %q", got)
+	}
+	// a key whose path hits a string or a false, and a broken manifest, cost only their own family
+	write(t, filepath.Join(e.RuntimeDir, "modules", "broken", "plugin.json"), `{`, 0o644)
+	write(t, cfg, `{"appearance":{"typography":{"mainFont":"Roboto Flex"}},"iris":"x","waffles":{"theming":{"font":{"family":false}}}}`, 0o644)
+	if got := strings.Join(configuredFonts(cfg, e.RuntimeDir), ","); got != "Geist,Noto Sans,Roboto Flex" {
+		t.Fatalf("got %q", got)
 	}
 }
