@@ -137,6 +137,10 @@ func (c *checker) dependencies(s *step) {
 		cmds = append(cmds, dep{"ydotool", "ydotool"}, dep{"secret-tool", "libsecret"},
 			dep{"gnome-keyring-daemon", "gnome-keyring"}, dep{"powerprofilesctl", "power-profiles-daemon"})
 	}
+	// the login starts the shell through niri-session and niri.service; Void starts niri itself
+	if c.e.OS != "void" {
+		cmds = append(cmds, dep{"niri-session", "Niri session"})
+	}
 	var names, ids []string
 	missing := func(name, id string) { names = append(names, name); ids = append(ids, id) }
 	for _, d := range cmds {
