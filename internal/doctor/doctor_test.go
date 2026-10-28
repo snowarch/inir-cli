@@ -20,7 +20,7 @@ func fixture(t *testing.T) (*Env, *checker) {
 	e.ConfDir = filepath.Join(e.ConfigHome, "inir")
 	e.RuntimeDir = filepath.Join(e.ConfigHome, "quickshell", "inir")
 	e.RepoRoot = filepath.Join(home, "inir")
-	for _, f := range []string{"shell.qml", "GlobalStates.qml", "modules/common/Config.qml", "services/NiriService.qml"} {
+	for _, f := range []string{"shell.qml", "GlobalStates.qml", "modules/common/Config.qml", "services/NiriService.qml", "modules/ii/plugin.json"} {
 		write(t, filepath.Join(e.RuntimeDir, f), "", 0o644)
 	}
 	write(t, filepath.Join(e.ConfDir, "installed_true"), "", 0o644)
@@ -156,4 +156,18 @@ func TestDenoVersion(t *testing.T) {
 			t.Errorf("deno %s: %v", v, got)
 		}
 	}
+}
+
+func TestCriticalFilesFamilies(t *testing.T) {
+	e, c := fixture(t)
+	want(t, "default family", checkStep(c, 4), StatusPass)
+	write(t, filepath.Join(e.ConfDir, "config.json"), `{"panelFamily": "iris"}`, 0o644)
+	want(t, "family missing", checkStep(c, 4), StatusFail)
+	c.jq = false // bash can't read the family without jq
+	want(t, "family unknown", checkStep(c, 4), StatusPass)
+	c.jq = true
+	write(t, filepath.Join(e.RuntimeDir, "modules", "iris", "plugin.json"), "{}", 0o644)
+	want(t, "family installed", checkStep(c, 4), StatusPass)
+	os.Symlink(filepath.Join(e.DataHome, "inir", "plugins", "gone"), filepath.Join(e.RuntimeDir, "modules", "gone"))
+	want(t, "link broken", checkStep(c, 4), StatusFail)
 }

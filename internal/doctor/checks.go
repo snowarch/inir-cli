@@ -478,6 +478,32 @@ func (c *checker) criticalFiles(s *step) {
 			missing++
 		}
 	}
+	// families come from the hub: the one in use, and every plugin linked in, must reach its plugin.json
+	family := "ii"
+	if cfg := filepath.Join(c.e.ConfDir, "config.json"); isFile(cfg) {
+		// no jq or a broken config: the family can't be told, so it isn't judged (like bash)
+		family = ""
+		var m struct {
+			PanelFamily any `json:"panelFamily"`
+		}
+		if c.jq && readJSON(cfg, &m) {
+			family = "ii"
+			if s, ok := m.PanelFamily.(string); ok && s != "" {
+				family = s
+			}
+		}
+	}
+	if family != "" && !isFile(filepath.Join(target, "modules", family, "plugin.json")) {
+		s.fail("Desktop family not installed: " + family + " (run: inir hub install " + family + ")")
+		missing++
+	}
+	modules, _ := os.ReadDir(filepath.Join(target, "modules"))
+	for _, m := range modules {
+		if _, err := os.Stat(filepath.Join(target, "modules", m.Name())); m.Type()&os.ModeSymlink != 0 && err != nil {
+			s.fail("Plugin link broken: modules/" + m.Name() + " (run: inir hub install " + m.Name() + ")")
+			missing++
+		}
+	}
 	if missing == 0 {
 		s.pass("Critical files present")
 	}
