@@ -1017,7 +1017,7 @@ func (c *checker) ownRuntime() string {
 func (c *checker) qtABI(s *step) {
 	if own := c.ownRuntime(); own != "" {
 		ver, _ := os.Readlink(own)
-		if _, code := runEnv(5*time.Second, []string{"QT_QPA_PLATFORM=offscreen"}, filepath.Join(own, "bin", "qs"), "--version"); code == 0 {
+		if _, code := runEnv(20*time.Second, []string{"QT_QPA_PLATFORM=offscreen"}, filepath.Join(own, "bin", "qs"), "--version"); code == 0 {
 			s.pass("qs-rs " + ver + " runs on its own Qt")
 			return
 		}
