@@ -99,6 +99,7 @@ type dep struct{ cmd, name string }
 // Dependencies is check_dependencies' command list, in its order.
 var Dependencies = []dep{
 	{"qs", "Quickshell"}, {"niri", "Niri"}, {"nmcli", "NetworkManager"}, {"wpctl", "WirePlumber"},
+	{"pw-dump", "PipeWire tools"},
 	{"jq", "jq"}, {"rsync", "rsync"}, {"curl", "curl"}, {"git", "git"}, {"python3", "python3"},
 	{"fish", "fish"}, {"magick", "ImageMagick"}, {"grim", "grim"}, {"cliphist", "cliphist"},
 	{"wl-copy", "wl-clipboard"}, {"wl-paste", "wl-clipboard"}, {"awww", "awww"}, {"awww-daemon", "awww"},
