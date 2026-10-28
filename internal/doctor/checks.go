@@ -1022,7 +1022,7 @@ func (c *checker) accelHooksOK() bool {
 }
 
 // pendingAddons is prebuilt_pending_addons: the titles of the add-ons this machine takes (their
-// "when" config key is true) whose part is unpacked and they are not.
+// "when" config key is true) whose part is unpacked and they are not. An add-on has its part's version.
 func (c *checker) pendingAddons() []string {
 	if goruntime.GOARCH != "amd64" || (c.e.Getenv("INIR_PREBUILT") != "" && c.e.Getenv("INIR_PREBUILT") != "1") {
 		return nil
@@ -1045,7 +1045,7 @@ func (c *checker) pendingAddons() []string {
 			m, _ := v.(map[string]any)
 			v = m[k]
 		}
-		dir := filepath.Join(c.e.DataHome, "inir", p.Dest, p.Version)
+		dir := filepath.Join(c.e.DataHome, "inir", p.Dest, pins.Parts[p.With].Version)
 		if v != true || !isFile(filepath.Join(dir, ".sha256")) {
 			continue
 		}
