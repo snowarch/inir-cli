@@ -171,3 +171,50 @@ func TestCriticalFilesFamilies(t *testing.T) {
 	os.Symlink(filepath.Join(e.DataHome, "inir", "plugins", "gone"), filepath.Join(e.RuntimeDir, "modules", "gone"))
 	want(t, "link broken", checkStep(c, 4), StatusFail)
 }
+
+func TestOwnRuntime(t *testing.T) {
+	e, c := fixture(t)
+	runtime := filepath.Join(e.DataHome, "inir", "runtime")
+	write(t, filepath.Join(runtime, "0.1.0", "bin", "qs"), "#!/bin/sh\nexit 0\n", 0o755)
+	if err := os.Symlink("0.1.0", filepath.Join(runtime, "current")); err != nil {
+		t.Fatal(err)
+	}
+	want(t, "starts", checkStep(c, 15), StatusPass)
+	want(t, "polkit", checkStep(c, 16), StatusPass)
+	write(t, filepath.Join(runtime, "0.1.0", "bin", "qs"), "#!/bin/sh\nexit 1\n", 0o755)
+	want(t, "won't start", checkStep(c, 15), StatusFixable)
+	os.RemoveAll(filepath.Join(runtime, "0.1.0"))
+	want(t, "gone", checkStep(c, 15), StatusFixable)
+}
+
+func TestAccelHooks(t *testing.T) {
+	e, c := fixture(t)
+	if !c.accelHooksOK() {
+		t.Fatal("nothing installed")
+	}
+	accel := filepath.Join(e.DataHome, "inir", "accel")
+	bin := filepath.Join(accel, "current", "inir-accel")
+	write(t, filepath.Join(accel, "0.1.0", "inir-accel"), "", 0o755)
+	if err := os.Symlink("0.1.0", filepath.Join(accel, "current")); err != nil {
+		t.Fatal(err)
+	}
+	venv := filepath.Join(e.StateHome, "quickshell", ".venv", "bin")
+	gen := filepath.Join(e.StateHome, "quickshell", "user", "generated", "bin")
+	os.MkdirAll(venv, 0o755)
+	os.MkdirAll(gen, 0o755)
+	os.Symlink("/usr/bin/python3", filepath.Join(venv, "python3"))
+	if c.accelHooksOK() {
+		t.Fatal("accel there, no hooks")
+	}
+	os.Remove(filepath.Join(venv, "python3"))
+	for _, h := range append([]string{filepath.Join(venv, "python3")}, filepath.Join(gen, accelGo[0]), filepath.Join(gen, accelGo[1]), filepath.Join(gen, accelGo[2])) {
+		os.Symlink(bin, h)
+	}
+	if !c.accelHooksOK() {
+		t.Fatal("hooks set")
+	}
+	os.Remove(filepath.Join(accel, "current"))
+	if c.accelHooksOK() {
+		t.Fatal("accel gone, hooks left")
+	}
+}

@@ -148,13 +148,20 @@ func runningShell() (string, bool) {
 }
 
 // quickshell is the executable of the running inir shell (Quickshell or qs-rs), so calls
-// reach it with its own runtime; with no shell running, the installed qs.
+// reach it with its own runtime; with no shell running, the one the launcher starts
+// (scripts/inir find_qs): INIR_QS_BIN, qs-rs where setup puts it, then the installed qs.
 func quickshell() (string, error) {
 	if exe, ok := runningShellExe(); ok {
 		return exe, nil
 	}
-	if _, err := os.Stat("/usr/bin/qs"); err == nil {
-		return "/usr/bin/qs", nil
+	data := os.Getenv("XDG_DATA_HOME")
+	if data == "" {
+		data = filepath.Join(os.Getenv("HOME"), ".local", "share")
+	}
+	for _, p := range []string{os.Getenv("INIR_QS_BIN"), filepath.Join(data, "inir", "runtime", "current", "bin", "qs"), "/usr/bin/qs"} {
+		if st, err := os.Stat(p); p != "" && err == nil && !st.IsDir() && st.Mode()&0o111 != 0 {
+			return p, nil
+		}
 	}
 	return exec.LookPath("qs")
 }

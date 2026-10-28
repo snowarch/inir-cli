@@ -40,7 +40,7 @@ var Steps = []Step{
 	{12, "niri", "Checking Niri compositor", true, (*checker).niriRunning},
 	{13, "python", "Checking Python packages", true, (*checker).python},
 	{14, "stale-quickshell", "Checking stale local quickshell", false, (*checker).staleQuickshell},
-	{15, "qt-abi", "Checking Quickshell/Qt ABI", false, (*checker).qtABI},
+	{15, "qt-abi", "Checking Quickshell/Qt ABI", true, (*checker).qtABI},
 	{16, "polkit", "Checking password prompts", false, (*checker).polkit},
 	{17, "quickshell", "Checking Quickshell", true, (*checker).quickshellLoads},
 	{18, "theme-colors", "Checking theme colors", true, (*checker).themeColors},
@@ -827,6 +827,9 @@ func (c *checker) python(s *step) {
 		s.fixable("Python venv missing", "Created Python venv")
 		fresh = true
 	}
+	if !fresh && !c.accelHooksOK() {
+		s.fixable("inir-accel hooks do not match what is installed", "inir-accel hooks match what is installed again")
+	}
 	switch {
 	case !uv:
 		s.fail("uv not installed, cannot check Python packages")
@@ -971,7 +974,57 @@ func ABIMismatch() string {
 	return ""
 }
 
+// _PREBUILT_GO in sdata/lib/prebuilt.sh: the Go helpers inir-accel answers for
+var accelGo = []string{"inir-washi", "inir-opencode-themegen", "inir-vscode-themegen"}
+
+// accelHooksOK is prebuilt_accel_hooks_ok: the hooks point at accel/current while it is
+// there, and none is left pointing at it once it went.
+func (c *checker) accelHooksOK() bool {
+	bin := filepath.Join(c.e.DataHome, "inir", "accel", "current", "inir-accel")
+	state := filepath.Join(c.e.StateHome, "quickshell")
+	hooks := []string{filepath.Join(state, ".venv", "bin", "python3")}
+	for _, g := range accelGo {
+		hooks = append(hooks, filepath.Join(state, "user", "generated", "bin", g))
+	}
+	if isExec(bin) {
+		for i, h := range hooks {
+			if i == 0 && !isDir(filepath.Dir(h)) {
+				continue
+			}
+			if t, _ := os.Readlink(h); t != bin {
+				return false
+			}
+		}
+		return true
+	}
+	for _, h := range hooks {
+		if t, _ := os.Readlink(h); strings.HasSuffix(t, "/accel/current/inir-accel") {
+			return false
+		}
+	}
+	return true
+}
+
+// ownRuntime is runtime/current when setup put qs-rs there (sdata/lib/prebuilt.sh): the
+// launcher starts it before any qs in PATH, and it carries its own Qt.
+func (c *checker) ownRuntime() string {
+	if p := filepath.Join(c.e.DataHome, "inir", "runtime", "current"); isSymlink(p) {
+		return p
+	}
+	return ""
+}
+
 func (c *checker) qtABI(s *step) {
+	if own := c.ownRuntime(); own != "" {
+		ver, _ := os.Readlink(own)
+		if _, code := runEnv(5*time.Second, []string{"QT_QPA_PLATFORM=offscreen"}, filepath.Join(own, "bin", "qs"), "--version"); code == 0 {
+			s.pass("qs-rs " + ver + " runs on its own Qt")
+			return
+		}
+		s.fixable("qs-rs "+ver+" does not start here",
+			"qs-rs "+ver+" does not start here, so the shell runs on Quickshell; inir update tries qs-rs again")
+		return
+	}
 	if lookPath("qs") == "" {
 		return
 	}
@@ -1002,6 +1055,10 @@ func (c *checker) polkit(s *step) {
 				return
 			}
 		}
+	}
+	if c.ownRuntime() != "" {
+		s.pass("Password prompts: answered by the shell")
+		return
 	}
 	qs := ""
 	if p := lookPath("qs"); p != "" {
@@ -1034,7 +1091,11 @@ func (c *checker) quickshellLoads(s *step) {
 		s.pass("Quickshell (skipped - no display)")
 		return
 	}
-	out, _ := stdout(10*time.Second, "qs", "-p", target, "list")
+	qs := "qs"
+	if own := c.ownRuntime(); own != "" && isExec(filepath.Join(own, "bin", "qs")) {
+		qs = filepath.Join(own, "bin", "qs")
+	}
+	out, _ := stdout(10*time.Second, qs, "-p", target, "list")
 	out = strings.TrimSpace(out)
 	if out != "" && !strings.HasPrefix(out, "No running instances") {
 		s.pass("Quickshell running")
