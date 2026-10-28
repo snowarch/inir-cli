@@ -196,6 +196,16 @@ func (c *checker) dependencies(s *step) {
 		missing("Linux Studio Plugins LV2", "lsp-plugins-lv2")
 	}
 
+	// Not commands either: the platform theme Qt apps take the colors through, and a color emoji font.
+	if !anyFile(pluginDirs("platformthemes"), "KDEPlasmaPlatformTheme6.so") {
+		missing("plasma-integration", "plasma-integration")
+	}
+	if lookPath("fc-list") != "" {
+		if out, _ := run(10*time.Second, "fc-list", ":", "family"); !strings.Contains(strings.ToLower(out), "noto color emoji") {
+			missing("Noto Color Emoji", "font-noto-color-emoji")
+		}
+	}
+
 	langs := map[string]bool{}
 	if lookPath("tesseract") != "" {
 		out, _ := stdout(10*time.Second, "tesseract", "--list-langs")
