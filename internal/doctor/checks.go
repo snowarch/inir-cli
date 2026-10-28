@@ -1262,10 +1262,9 @@ func (c *checker) themeColors(s *step) {
 			s.fail("Theme colors not generated")
 			s.hint("Set a wallpaper via settings, then run: ./setup doctor")
 			return
-		case scriptIn("scripts/colors/generate_colors_material.py") == "" ||
-			(!isExec(filepath.Join(c.e.StateHome, "quickshell", ".venv", "bin", "python3")) && lookPath("python3") == ""):
+		case !isExec(c.accelBin()):
 			s.fail("Theme colors regeneration failed")
-			s.hint("Python color generation failed — check venv")
+			s.hint("inir-accel is missing or failed: run inir update")
 			return
 		default:
 			s.fixable("Theme colors not generated", "Regenerated theme colors from "+source)
@@ -1285,6 +1284,14 @@ func (c *checker) themeColors(s *step) {
 
 // fallbackWallpaper is doctor_fallback_wallpaper: the first non-empty image
 // in the shipped wallpapers.
+// accelBin is the inir-accel the shell runs (scripts/lib/accel.sh: INIR_ACCEL first).
+func (c *checker) accelBin() string {
+	if p := c.e.Getenv("INIR_ACCEL"); p != "" {
+		return p
+	}
+	return filepath.Join(c.e.DataHome, "inir", "accel", "current", "inir-accel")
+}
+
 func (c *checker) fallbackWallpaper() string {
 	var dirs []string
 	if c.e.RuntimeDir != "" {
