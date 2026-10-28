@@ -44,6 +44,8 @@ func main() {
 			}
 		case "__complete":
 			os.Exit(runComplete(args[1:]))
+		case "__commands":
+			os.Exit(runCommands())
 		case "completions":
 			os.Exit(runCompletions(args[1:]))
 		case "doctor":
