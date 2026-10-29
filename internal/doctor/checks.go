@@ -866,10 +866,15 @@ func (c *checker) helpers(s *step) {
 	if !c.accelHooksOK() {
 		s.fixable("inir-accel hooks do not match what is installed", "inir-accel hooks match what is installed again")
 	}
-	if isExec(filepath.Join(c.e.DataHome, "inir", "yt-dlp", "yt-dlp")) {
+	// ytdlp_build: upstream builds yt-dlp for these two; elsewhere the distro's is the one
+	ownBuild := goruntime.GOARCH == "amd64" || goruntime.GOARCH == "arm64"
+	switch {
+	case isExec(filepath.Join(c.e.DataHome, "inir", "yt-dlp", "yt-dlp")):
 		s.pass("yt-dlp OK")
-	} else {
-		s.fixable("yt-dlp missing", "Installed current yt-dlp for YT Music")
+	case !ownBuild && lookPath("yt-dlp") != "":
+		s.pass("yt-dlp OK (the distro's: no upstream build for this machine)")
+	default:
+		s.fixable("yt-dlp missing for YT Music", "Installed current yt-dlp for YT Music")
 	}
 	if denoCompatible(lookPath("deno")) {
 		s.pass("YT Music JS runtime OK")
