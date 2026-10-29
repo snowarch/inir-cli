@@ -128,7 +128,7 @@ func powerProfilesOnBus() bool {
 var Dependencies = []dep{
 	{"qs", "Quickshell"}, {"niri", "Niri"}, {"nmcli", "NetworkManager"}, {"wpctl", "WirePlumber"},
 	{"pw-dump", "PipeWire tools"},
-	{"jq", "jq"}, {"rsync", "rsync"}, {"curl", "curl"}, {"git", "git"}, {"python3", "python3"},
+	{"jq", "jq"}, {"rsync", "rsync"}, {"curl", "curl"}, {"unzip", "unzip"}, {"git", "git"}, {"python3", "python3"},
 	{"fish", "fish"}, {"magick", "ImageMagick"}, {"grim", "grim"}, {"cliphist", "cliphist"},
 	{"wl-copy", "wl-clipboard"}, {"wl-paste", "wl-clipboard"}, {"awww", "awww"}, {"awww-daemon", "awww"},
 	{"hyprpicker", "hyprpicker"}, {"playerctl", "playerctl"}, {"notify-send", "libnotify"},
