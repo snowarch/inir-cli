@@ -62,7 +62,7 @@ func runDeps(args []string) int {
 		table = installedFile("sdata", "deps.toml")
 	}
 	if table == "" {
-		ui.Log("inir deps").Error("no installed shell with sdata/deps.toml")
+		ui.Log("inir deps").Error("no installed shell with sdata/deps.toml; from your iNiR clone run: ./setup install")
 		return 1
 	}
 	t, err := deps.Load(table)
@@ -176,7 +176,7 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 	}
 	code := 0
 	if err := m.InstallPackages(s, yes); err != nil {
-		ui.Log("inir deps").Error("packages did not install", "err", err)
+		ui.Log("inir deps").Error("packages did not install", "err", err, "retry", "inir deps install")
 		code = 1
 	}
 	if len(s.AUR) > 0 && !m.HasAURHelper() && providers["aur-helper"] {
@@ -186,13 +186,13 @@ func installPlan(p *deps.Plan, on map[string]bool, yes, dryRun bool) int {
 		}
 	}
 	if err := m.InstallAUR(s, yes); err != nil {
-		ui.Log("inir deps").Error("AUR packages did not install", "err", err)
+		ui.Log("inir deps").Error("AUR packages did not install", "err", err, "retry", "inir deps install")
 		code = 1
 	}
 	for _, recipe := range s.Providers {
 		ui.Step(os.Stdout, t, "Building "+recipe)
 		if err := setup("provider", recipe).Run(); err != nil {
-			ui.Log("inir deps").Error("build failed", "provider", recipe, "err", err)
+			ui.Log("inir deps").Error("build failed", "provider", recipe, "err", err, "retry", "inir deps install")
 			code = 1
 		}
 	}

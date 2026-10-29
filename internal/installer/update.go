@@ -29,7 +29,7 @@ func Update(args []string) int {
 	t := ui.Current()
 	setupDir := SetupDir(doctor.NewEnv())
 	if setupDir == "" {
-		ui.Log("inir update").Error("no iNiR checkout found", "looked", "INIR_SETUP_DIR, here, the installed one")
+		ui.Log("inir update").Error("no iNiR checkout found; from the folder you cloned iNiR into run: ./setup update", "looked", "INIR_SETUP_DIR, here, the installed one")
 		return 1
 	}
 	simulate := slices.Contains(args, "--simulate") || slices.Contains(args, "--dry-run")

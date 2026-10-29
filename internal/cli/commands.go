@@ -39,7 +39,7 @@ func withConfig(flags ...Flag) []Flag {
 	return append(flags, configShort, config, help)
 }
 
-var yes = Flag{Name: "--yes", Desc: "Answer yes to every question"}
+var yes = Flag{Name: "--yes", Desc: "Take each question's default answer"}
 var quiet = Flag{Name: "--quiet", Desc: "Print less"}
 
 var installFlags = []Flag{

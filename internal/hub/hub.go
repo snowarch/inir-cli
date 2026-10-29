@@ -781,14 +781,14 @@ func (e *Env) place(item Item, kind Kind, data []byte) (string, error) {
 // canLink: the shell has the folder a plugin goes in and nothing of someone else's sits at its path.
 func (e *Env) canLink(id, provides string) error {
 	if e.Shell == "" {
-		return fail(ExitError, "no iNiR shell installed to link %s into", id)
+		return fail(ExitError, "no iNiR shell installed to link %s into; install iNiR first: ./setup install", id)
 	}
 	at := filepath.Join(e.Shell, provides)
 	if !isDir(filepath.Dir(at)) {
 		return fail(ExitError, "%s goes in %s, which this shell does not have", id, path.Dir(provides))
 	}
 	if _, err := os.Readlink(at); err != nil && exists(at) {
-		return fail(ExitConflict, "%s already exists and was not installed from the hub", at)
+		return fail(ExitConflict, "%s already exists and was not installed from the hub; rename or remove it first", at)
 	}
 	return nil
 }
@@ -938,7 +938,7 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 		kind, _ := KindOf(str(item, "kind"))
 		switch {
 		case item["orphan"] == true:
-			return results, fail(ExitUnknown, "%s is no longer listed in any hub source", id)
+			return results, fail(ExitUnknown, "%s is no longer listed in any hub source; remove it with: inir hub remove %s", id, id)
 		case item["conflict"] == true:
 			at := e.target(kind.Name, id)
 			if kind.Plugin && !exists(at) {
@@ -1017,9 +1017,9 @@ func (e *Env) Fetch(ids []string, version string) ([]Result, error) {
 		kind, _ := KindOf(str(item, "kind"))
 		switch {
 		case item["orphan"] == true:
-			return fail(ExitUnknown, "%s is no longer listed in any hub source", id)
+			return fail(ExitUnknown, "%s is no longer listed in any hub source; remove it with: inir hub remove %s", id, id)
 		case item["compatible"] != true:
-			return fail(ExitIncompatible, "%s needs iNiR %s (this is %s)", str(item, "name"), str(item, "minInir"), e.Version)
+			return fail(ExitIncompatible, "%s needs iNiR %s (this is %s); run: inir update", str(item, "name"), str(item, "minInir"), e.Version)
 		}
 		for _, need := range strs(item, "requires") {
 			if err := get(need); err != nil {
