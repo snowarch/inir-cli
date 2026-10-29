@@ -622,7 +622,11 @@ func (r *Repo) check(folder string) *entry {
 			r.errorf(p, "could not read its size; is it really an image?")
 		} else {
 			if w != previewW || h != previewH {
-				r.errorf(p, "%dx%d: previews are %dx%d, made by: inir hub preview %s --shot SCREENSHOT", w, h, previewW, previewH, folder)
+				how := "--shot SCREENSHOT"
+				if kind.Name == "widget" {
+					how = "--wallpaper WALLPAPER --shot WIDGET_SHOT"
+				}
+				r.errorf(p, "%dx%d: previews are %dx%d, made by: inir hub preview %s %s", w, h, previewW, previewH, folder, how)
 			}
 		}
 	}
@@ -1014,6 +1018,9 @@ func (r *Repo) Preview(folder, wallpaper, shot, side string) (string, error) {
 			}
 			return "", errors.New(msg)
 		}
+	}
+	if !exists(shot) {
+		return "", fail(ExitUsage, "%s: no such file", shot)
 	}
 	w, h, ok := ImageSize(shot)
 	if !ok {
