@@ -54,7 +54,7 @@ func UpdateStages() []*Stage {
 		{Key: "3", Title: "Checking your setup", Expected: time.Second},
 		{Key: "4", Title: "Finalizing", Expected: time.Second},
 		{Key: "5", Title: "Checking dependencies", Expected: 2 * time.Second},
-		{Key: "6", Title: "Python packages", Expected: 2 * time.Second},
+		{Key: "6", Title: "YT Music runtime", Expected: 2 * time.Second},
 		{Key: "7", Title: "Restarting the shell", Expected: 6 * time.Second},
 	}
 }

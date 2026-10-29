@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -39,7 +40,7 @@ var Steps = []Step{
 	{10, "manifest", "Checking file manifest", true, (*checker).manifest},
 	{11, "service", "Checking user service", true, (*checker).service},
 	{12, "niri", "Checking Niri compositor", true, (*checker).niriRunning},
-	{13, "python", "Checking Python packages", true, (*checker).python},
+	{13, "helpers", "Checking helpers", true, (*checker).helpers},
 	{14, "stale-quickshell", "Checking stale local quickshell", false, (*checker).staleQuickshell},
 	{15, "qt-abi", "Checking Quickshell/Qt ABI", true, (*checker).qtABI},
 	{16, "polkit", "Checking password prompts", false, (*checker).polkit},
@@ -131,7 +132,7 @@ var Dependencies = []dep{
 	{"fish", "fish"}, {"magick", "ImageMagick"}, {"grim", "grim"}, {"cliphist", "cliphist"},
 	{"wl-copy", "wl-clipboard"}, {"wl-paste", "wl-clipboard"}, {"awww", "awww"}, {"awww-daemon", "awww"},
 	{"hyprpicker", "hyprpicker"}, {"playerctl", "playerctl"}, {"notify-send", "libnotify"},
-	{"flock", "util-linux"}, {"wlsunset", "wlsunset"}, {"easyeffects", "EasyEffects"}, {"uv", "uv"},
+	{"flock", "util-linux"}, {"wlsunset", "wlsunset"}, {"easyeffects", "EasyEffects"},
 	{"cava", "cava"}, {"qalc", "qalculate"}, {"yt-dlp", "yt-dlp"}, {"socat", "socat"},
 	{"brightnessctl", "brightnessctl"}, {"slurp", "slurp"}, {"wf-recorder", "wf-recorder"},
 	{"ffmpeg", "ffmpeg"}, {"swappy", "swappy"}, {"tesseract", "tesseract"},
@@ -181,19 +182,6 @@ func (c *checker) dependencies(s *step) {
 			missing("power-profiles-daemon", "power-profiles")
 		}
 	}
-	// the venv builds pycairo and pygobject; Debian and Ubuntu ship their headers apart
-	if c.e.OS == "debian" || c.e.OS == "ubuntu" {
-		if _, code := run(10*time.Second, "pkg-config", "--exists", "cairo"); code != 0 {
-			missing("Cairo headers", "cairo-headers")
-		}
-		if _, code := run(10*time.Second, "pkg-config", "--exists", "girepository-2.0"); code != 0 {
-			missing("GObject headers", "gi-headers")
-		}
-		if _, code := run(10*time.Second, "pkg-config", "--exists", "dbus-1"); code != 0 {
-			missing("D-Bus headers", "dbus-headers")
-		}
-	}
-
 	if c.e.OS == "void" {
 		webengine, layershell := false, false
 		for _, root := range []string{"/usr/lib/qt6/qml", "/usr/lib64/qt6/qml", "/usr/local/lib/qt6/qml", "/usr/local/lib64/qt6/qml"} {
@@ -874,49 +862,14 @@ func envValue(env, key string) string {
 
 // --- 13 -----------------------------------------------------------------------
 
-func (c *checker) python(s *step) {
-	venv := filepath.Join(c.e.StateHome, "quickshell", ".venv")
-	req := ""
-	if c.e.RuntimeDir != "" && isFile(filepath.Join(c.e.RuntimeDir, "sdata", "uv", "requirements.txt")) {
-		req = filepath.Join(c.e.RuntimeDir, "sdata", "uv", "requirements.txt")
-	} else if root := c.repoRoot(); root != "" && isFile(filepath.Join(root, "sdata", "uv", "requirements.txt")) {
-		req = filepath.Join(root, "sdata", "uv", "requirements.txt")
-	} else {
-		c.runtimeOr(s, "Python packages")
-		s.pass("Python (no requirements.txt)")
-		return
-	}
-	uv := lookPath("uv") != ""
-	fresh := false
-	if isDir(filepath.Join(venv, "bin")) {
-		if _, code := run(10*time.Second, filepath.Join(venv, "bin", "python"), "--version"); code != 0 {
-			s.fail("Broken Python venv detected")
-			fresh = true
-		}
-	}
-	if fresh || !isDir(venv) {
-		if !uv {
-			s.fail("Python venv missing (install uv)")
-			return
-		}
-		s.fixable("Python venv missing", "Created Python venv")
-		fresh = true
-	}
-	if !fresh && !c.accelHooksOK() {
+func (c *checker) helpers(s *step) {
+	if !c.accelHooksOK() {
 		s.fixable("inir-accel hooks do not match what is installed", "inir-accel hooks match what is installed again")
 	}
-	switch {
-	case !uv:
-		s.fail("uv not installed, cannot check Python packages")
-	case fresh:
-		s.fixable("Python packages below requirements", "Python packages brought up to requirements")
-	default:
-		plan, _ := runEnv(60*time.Second, []string{"VIRTUAL_ENV=" + venv}, "uv", "pip", "install", "--dry-run", "--offline", "-r", req)
-		if strings.Contains(plan, "Would make no changes") {
-			s.pass("Python packages OK")
-		} else {
-			s.fixable("Python packages below requirements", "Python packages brought up to requirements")
-		}
+	if isExec(filepath.Join(c.e.DataHome, "inir", "yt-dlp", "yt-dlp")) {
+		s.pass("yt-dlp OK")
+	} else {
+		s.fixable("yt-dlp missing", "Installed current yt-dlp for YT Music")
 	}
 	if denoCompatible(lookPath("deno")) {
 		s.pass("YT Music JS runtime OK")
@@ -1057,15 +1010,12 @@ var accelGo = []string{"inir-washi", "inir-opencode-themegen", "inir-vscode-them
 func (c *checker) accelHooksOK() bool {
 	bin := filepath.Join(c.e.DataHome, "inir", "accel", "current", "inir-accel")
 	state := filepath.Join(c.e.StateHome, "quickshell")
-	hooks := []string{filepath.Join(state, ".venv", "bin", "python3")}
+	var hooks []string
 	for _, g := range accelGo {
 		hooks = append(hooks, filepath.Join(state, "user", "generated", "bin", g))
 	}
 	if isExec(bin) {
-		for i, h := range hooks {
-			if i == 0 && !isDir(filepath.Dir(h)) {
-				continue
-			}
+		for _, h := range hooks {
 			if t, _ := os.Readlink(h); t != bin {
 				return false
 			}
@@ -1536,16 +1486,11 @@ func (c *checker) environment(s *step) {
 		}
 	}
 	profiles := 0
-	for _, rc := range []string{filepath.Join(c.e.Home, ".bashrc")} {
-		if data, err := os.ReadFile(rc); err == nil && !bytes.Contains(data, []byte("INIR_VENV")) {
+	// bash and zsh carry the iNiR environment block (terminal colours, prompt)
+	for _, rc := range []string{".bashrc", ".zshrc"} {
+		if data, err := os.ReadFile(filepath.Join(c.e.Home, rc)); err == nil && !slices.Contains(strings.Split(string(data), "\n"), "# iNiR environment") {
 			profiles++
 		}
-	}
-	if lookPath("fish") != "" && !isFile(filepath.Join(c.e.ConfigHome, "fish", "conf.d", "inir-env.fish")) {
-		profiles++
-	}
-	if data, err := os.ReadFile(filepath.Join(c.e.Home, ".zshrc")); err == nil && !bytes.Contains(data, []byte("INIR_VENV")) {
-		profiles++
 	}
 	if legacy {
 		s.fixable("Legacy global Quickshell allocator tuning is set", "Removed legacy global Quickshell allocator tuning")

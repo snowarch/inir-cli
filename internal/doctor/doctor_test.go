@@ -128,9 +128,8 @@ func TestEnvironmentProfiles(t *testing.T) {
 	e, c := fixture(t)
 	write(t, filepath.Join(e.Home, ".bashrc"), "# nothing\n", 0o644)
 	s := checkStep(c, 23)
-	want(t, "bashrc without INIR_VENV", s, StatusFixable)
-	write(t, filepath.Join(e.Home, ".bashrc"), "export INIR_VENV=x\n", 0o644)
-	write(t, filepath.Join(e.ConfigHome, "fish", "conf.d", "inir-env.fish"), "", 0o644)
+	want(t, "bashrc without the iNiR block", s, StatusFixable)
+	write(t, filepath.Join(e.Home, ".bashrc"), "# iNiR environment\n# end iNiR\n", 0o644)
 	want(t, "set", checkStep(c, 23), StatusPass)
 	write(t, filepath.Join(e.ConfigHome, "environment.d", "quickshell-mem.conf"), "MALLOC_ARENA_MAX=2\n", 0o644)
 	want(t, "legacy allocator", checkStep(c, 23), StatusFixable)
@@ -207,16 +206,12 @@ func TestAccelHooks(t *testing.T) {
 	if err := os.Symlink("0.1.0", filepath.Join(accel, "current")); err != nil {
 		t.Fatal(err)
 	}
-	venv := filepath.Join(e.StateHome, "quickshell", ".venv", "bin")
 	gen := filepath.Join(e.StateHome, "quickshell", "user", "generated", "bin")
-	os.MkdirAll(venv, 0o755)
 	os.MkdirAll(gen, 0o755)
-	os.Symlink("/usr/bin/python3", filepath.Join(venv, "python3"))
 	if c.accelHooksOK() {
 		t.Fatal("accel there, no hooks")
 	}
-	os.Remove(filepath.Join(venv, "python3"))
-	hooks := []string{filepath.Join(venv, "python3")}
+	var hooks []string
 	for _, g := range accelGo {
 		hooks = append(hooks, filepath.Join(gen, g))
 	}
