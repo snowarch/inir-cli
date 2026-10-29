@@ -43,6 +43,8 @@ var (
 const (
 	previewMax = 700 * 1024
 	itemMax    = 2 << 20
+	// every card in the Hub and on inir.space is 16:10 at this size
+	previewW, previewH = 1280, 800
 )
 
 var leftOut = map[string]bool{"hub.json": true, "README.md": true, "CHANGELOG.md": true} // store listing, not what installs
@@ -619,11 +621,8 @@ func (r *Repo) check(folder string) *entry {
 		if w, h, ok := ImageSize(p); !ok {
 			r.errorf(p, "could not read its size; is it really an image?")
 		} else {
-			if w < 800 || h < 450 {
-				r.errorf(p, "%dx%d is too small: at least 800x450", w, h)
-			}
-			if ratio := float64(w) / float64(h); ratio < 1.2 || ratio > 2.0 {
-				r.errorf(p, "%dx%d: a landscape shot between 6:5 and 2:1 (16:10 is ideal)", w, h)
+			if w != previewW || h != previewH {
+				r.errorf(p, "%dx%d: previews are %dx%d, made by: inir hub preview %s --shot SCREENSHOT", w, h, previewW, previewH, folder)
 			}
 		}
 	}
@@ -982,16 +981,16 @@ func ImageSize(p string) (int, int, bool) {
 	return 0, 0, false
 }
 
-// Preview frames a widget the way every card in the Hub is framed: the wallpaper filling 1280x800, the
-// widget at about half the width on one side. The shot is the widget as iNiR draws it
-// (`inir background widgetSnapshot custom.<id> shot.png`), taken at 200 % so it stays sharp.
+// Preview frames a picture the way every card in the Hub is framed, 1280x800. With a wallpaper, the shot is a
+// widget as iNiR draws it (`inir background widgetSnapshot custom.<id> shot.png`, taken at 200 % so it stays
+// sharp), placed at about half the width on one side; without one, the shot is a whole screen, cropped to fill.
 func (r *Repo) Preview(folder, wallpaper, shot, side string) (string, error) {
-	const pw, ph = 1280, 800
+	const pw, ph = previewW, previewH
 	if _, err := exec.LookPath("magick"); err != nil {
 		return "", fail(ExitUsage, "preview needs ImageMagick (the magick command)")
 	}
-	if !isDir(folder) || !exists(wallpaper) {
-		return "", fail(ExitUsage, "give an item folder and a wallpaper image")
+	if !isDir(folder) || (wallpaper == "" && shot == "") || (wallpaper != "" && !exists(wallpaper)) {
+		return "", fail(ExitUsage, "give an item folder and a screenshot, or a wallpaper for a widget")
 	}
 	tmp, err := os.MkdirTemp("", "inir-hub-preview-")
 	if err != nil {
@@ -1020,6 +1019,13 @@ func (r *Repo) Preview(folder, wallpaper, shot, side string) (string, error) {
 	if !ok {
 		return "", fail(ExitUsage, "%s: not an image", shot)
 	}
+	out := filepath.Join(folder, "preview.webp")
+	if wallpaper == "" {
+		cmd := exec.Command("magick", shot+"[0]", "-resize", fmt.Sprintf("%dx%d^", pw, ph), "-gravity", "center",
+			"-extent", fmt.Sprintf("%dx%d", pw, ph), "-quality", "88", out)
+		cmd.Stderr = os.Stderr
+		return out, cmd.Run()
+	}
 	scale := min(pw*0.46/float64(w), ph*0.62/float64(h), 1.0)
 	if scale >= 1.0 && float64(w) < pw*0.36 {
 		fmt.Fprintf(os.Stderr, "note: the shot is %dx%d; set the widget to 200 %% before shooting so it reads at card size\n", w, h)
@@ -1031,7 +1037,6 @@ func (r *Repo) Preview(folder, wallpaper, shot, side string) (string, error) {
 		x = pw - margin - tw
 	}
 	y := max(margin/2, int(float64(ph-th)/2+0.5)-24)
-	out := filepath.Join(folder, "preview.webp")
 	cmd := exec.Command("magick", wallpaper+"[0]", "-resize", fmt.Sprintf("%dx%d^", pw, ph), "-gravity", "center",
 		"-extent", fmt.Sprintf("%dx%d", pw, ph), "(", shot, "-background", "black", "-alpha", "background",
 		"-resize", fmt.Sprintf("%dx%d", tw, th), ")", "-gravity", "northwest", "-geometry", fmt.Sprintf("+%d+%d", x, y),

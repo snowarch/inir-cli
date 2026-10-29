@@ -33,7 +33,8 @@ In a hub repo:
   bumps [--base REF]                    changed items must raise their version (default origin/main)
   new KIND ID [--author GH]             start an item from templates/KIND
   build [--out DIR]                     index.json, packages, previews, gallery (default dist)
-  preview ITEM_DIR --wallpaper IMG [--shot PNG] [--side left|right]
+  preview ITEM_DIR --shot SCREENSHOT     1280x800, cropped to fill
+  preview ITEM_DIR --wallpaper IMG [--shot PNG] [--side left|right]  a widget on a wallpaper
 
 Exit codes: 0 ok, 1 error, 2 usage, 3 a local item of that name exists that the hub did not install,
 4 needs a newer iNiR, 5 network, 6 package failed its checksum, 7 unknown id.`
@@ -383,8 +384,8 @@ func runHubRepo(verb string, args []string) int {
 		return 0
 	}
 	wallpaper, shot, side := flag("--wallpaper", ""), flag("--shot", ""), flag("--side", "left")
-	if len(args) != 1 || wallpaper == "" || (side != "left" && side != "right") {
-		fmt.Fprintln(os.Stderr, "usage: inir hub preview ITEM_DIR --wallpaper IMG [--shot PNG] [--side left|right]")
+	if len(args) != 1 || (wallpaper == "" && shot == "") || (side != "left" && side != "right") {
+		fmt.Fprintln(os.Stderr, "usage: inir hub preview ITEM_DIR --shot SCREENSHOT | --wallpaper IMG [--shot PNG] [--side left|right]")
 		return 2
 	}
 	out, err := repo.Preview(args[0], wallpaper, shot, side)
