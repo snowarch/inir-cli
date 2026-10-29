@@ -68,6 +68,10 @@ func main() {
 			os.Exit(activity.Hook(args[1:]))
 		case "look":
 			os.Exit(runLook(args[1:]))
+		case "theme":
+			if code, handled := runTheme(args[1:]); handled {
+				os.Exit(code)
+			}
 		case "install":
 			if installer.Interactive(args[1:]) {
 				os.Exit(installer.Main(args[1:]))
