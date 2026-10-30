@@ -139,6 +139,8 @@ var Commands = []Command{
 		{Name: "refresh", Desc: "Tell the shell to read the hub again"},
 		{Name: "changed", Desc: "Tell the shell a kind changed"},
 		{Name: "validate", Desc: "Check a hub repo's items"},
+		{Name: "audit", Desc: "What each item may do, reaches, and its quality score", Flags: []Flag{
+			{Name: "--markdown", Desc: "As Markdown, for a pull request's summary"}}},
 		{Name: "bumps", Desc: "Changed items raise their version"},
 		{Name: "new", Desc: "Start an item from a template"},
 		{Name: "build", Desc: "Build a hub repo's catalogue"},

@@ -75,24 +75,14 @@ var detect = map[string]*regexp.Regexp{
 	"files":   regexp.MustCompile(`\bFileView\s*\{|\bFolderListModel\s*\{|\bwriteAdapter\b`),
 }
 
-// Never accepted: code that fetches more code, or hides what it does.
-var forbidden = []struct {
-	re  *regexp.Regexp
-	why string
-}{
-	{regexp.MustCompile(`(curl|wget)[^\n|]*\|\s*(ba|z|fi)?sh\b`), "pipes a download into a shell"},
-	{regexp.MustCompile(`\beval\s*\(`), "uses eval()"},
-	{regexp.MustCompile(`Qt\.createQmlObject\s*\(`), "builds QML from a string"},
-	{regexp.MustCompile(`source\s*:\s*["']https?://[^"']*\.qml`), "loads QML from the internet"},
-	{regexp.MustCompile(`atob\s*\(|base64\s+(-d|--decode)`), "decodes hidden content"},
-}
-
 // Repo is a hub repo checkout (the folder holding schema/hub.schema.json).
 type Repo struct {
 	Root     string
 	Errors   []string
 	Warnings []string
 	Fix      bool // validate --fix writes the qmldir files a plugin lacks
+
+	ignoredFiles map[string]bool
 }
 
 // FindRepo walks up from dir to the hub repo that holds it.
@@ -308,6 +298,7 @@ type entry struct {
 	preview string
 	palette map[string]string
 	values  map[string]any
+	card    *Card
 }
 
 func text(m map[string]any, key string) string {
@@ -573,27 +564,8 @@ func (r *Repo) check(folder string) *entry {
 		}
 	}
 
-	// What the code does against what it says it does.
-	found := map[string]bool{}
-	for _, p := range filesOf(folder) {
-		if !slices.Contains(codeExt, filepath.Ext(p)) {
-			continue
-		}
-		b, _ := os.ReadFile(p)
-		for perm, re := range detect {
-			if re.Match(b) {
-				found[perm] = true
-			}
-		}
-		for _, f := range forbidden {
-			if f.re.Match(b) {
-				r.errorf(p, "not accepted: %s", f.why)
-			}
-		}
-		if ext := filepath.Ext(p); (ext == ".sh" || ext == ".py" || ext == ".fish") && kind.Name != "webapp" {
-			found["process"] = true
-		}
-	}
+	// What the code does against what it says it does, and what it may never do (audit.go).
+	found := r.audit(e, folder, hubFile, hub, declared)
 	for _, perm := range permissionOrder {
 		if found[perm] && !declared[perm] {
 			r.errorf(hubFile, `the code %s: declare "%s" in "permissions"`, strings.ToLower(Permissions[perm]), perm)
@@ -703,6 +675,7 @@ func (r *Repo) Validate(paths []string) []*entry {
 		}
 	}
 	if len(paths) == 0 {
+		r.pulls()
 		for _, k := range Kinds {
 			entries, _ := os.ReadDir(filepath.Join(r.Root, k.Dir))
 			for _, e := range entries {
@@ -772,6 +745,7 @@ func (r *Repo) Build(out string) (int, error) {
 			return 0, err
 		}
 	}
+	pulls, stats := r.pulls(), r.stats()
 	featured := map[string]bool{}
 	if b, err := os.ReadFile(filepath.Join(r.Root, "featured.json")); err == nil {
 		var f struct{ Items []string }
@@ -819,12 +793,13 @@ func (r *Repo) Build(out string) (int, error) {
 		if featured[e.id] {
 			item["featured"] = true
 		}
+		r.store(item, e.id, folder, stats, pulls)
 		items = append(items, item)
 	}
 	index := map[string]any{
 		"schema": 1, "name": "iNiR Hub", "home": "https://github.com/snowarch/inir-hub",
 		"commit": r.git("rev-parse", "HEAD"), "generated": time.Now().UTC().Format("2006-01-02T15:04:05+00:00"),
-		"permissions": Permissions, "items": orNone(items),
+		"permissions": Permissions, "items": orNone(items), "blocked": append([]Pull{}, pulls...),
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

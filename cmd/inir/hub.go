@@ -30,6 +30,7 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
 
 In a hub repo:
   validate [--fix] [ITEM_DIR...]        check every item, or the given ones (--fix writes missing qmldir files)
+  audit [ITEM_DIR...] [--markdown]      what each item may do, runs, reaches and touches, and its quality score
   bumps [--base REF]                    changed items must raise their version (default origin/main)
   new KIND ID [--author GH]             start an item from templates/KIND
   build [--out DIR]                     index.json, packages, previews, gallery (default dist)
@@ -37,7 +38,7 @@ In a hub repo:
   preview ITEM_DIR --wallpaper IMG [--shot PNG] [--side left|right]  a widget on a wallpaper
 
 Exit codes: 0 ok, 1 error, 2 usage, 3 a local item of that name exists that the hub did not install,
-4 needs a newer iNiR, 5 network, 6 package failed its checksum, 7 unknown id.`
+4 needs a newer iNiR, 5 network, 6 package failed its checksum, 7 unknown id, 8 pulled from the hub.`
 
 // runHub is `inir hub`. What only talks to the running shell (open, refresh, changed, the hub IPC
 // target) stays with the bash launcher.
@@ -52,8 +53,8 @@ func runHub(args []string) (int, bool) {
 	case "", "-h", "--help", "help":
 		fmt.Println(hubUsage)
 		return 0, true
-	case "validate", "bumps", "new", "build", "preview":
-		return runHubRepo(verb, rest), true
+	case "validate", "audit", "bumps", "new", "build", "preview":
+		return runHubRepo(verb, rest, asJSON), true
 	case "status", "sources", "sync", "list", "search", "info", "install", "update", "remove", "fetch", "link":
 	default:
 		return 0, false
@@ -317,7 +318,7 @@ func printItems(items []hub.Item) {
 	}
 }
 
-func runHubRepo(verb string, args []string) int {
+func runHubRepo(verb string, args []string, asJSON bool) int {
 	wd, _ := os.Getwd()
 	repo, err := hub.FindRepo(wd)
 	if err != nil {
@@ -350,6 +351,26 @@ func runHubRepo(verb string, args []string) int {
 			line += fmt.Sprintf(", %d warning(s)", len(repo.Warnings))
 		}
 		fmt.Println(line)
+		return 0
+	case "audit":
+		markdown := slices.Contains(args, "--markdown")
+		args = slices.DeleteFunc(args, func(a string) bool { return a == "--markdown" })
+		cards := repo.Audit(args)
+		switch {
+		case asJSON:
+			printJSON(cards)
+		case markdown:
+			for _, c := range cards {
+				fmt.Print(c.Markdown())
+			}
+		default:
+			for _, c := range cards {
+				fmt.Println(c.Text())
+			}
+		}
+		if len(repo.Errors) > 0 {
+			return 1
+		}
 		return 0
 	case "bumps":
 		repo.Bumps(flag("--base", "origin/main"))

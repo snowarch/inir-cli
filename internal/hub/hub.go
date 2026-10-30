@@ -46,6 +46,7 @@ const (
 	ExitNetwork      = 5
 	ExitIntegrity    = 6 // package failed its checksum or its limits
 	ExitUnknown      = 7
+	ExitPulled       = 8 // the hub pulled this item or version
 )
 
 type Error struct {
@@ -146,6 +147,8 @@ type Env struct {
 	Shell      string // the shell's runtime dir (shell.qml), where plugins are linked; "" when none
 	Version    string
 	Sources    []string
+
+	pulled map[string][]Pull // per source, from its index
 }
 
 func Default() *Env {
@@ -326,9 +329,10 @@ type Source struct {
 }
 
 type index struct {
-	Name  string
-	Home  string
-	Items []map[string]any
+	Name   string
+	Home   string
+	Items  []map[string]any
+	Pulled []Pull
 }
 
 type cacheFile struct {
@@ -349,6 +353,7 @@ func parseIndex(data []byte) (*index, bool) {
 	out := &index{}
 	out.Name, _ = raw["name"].(string)
 	out.Home, _ = raw["home"].(string)
+	out.Pulled = parsePulls(raw["blocked"])
 	for _, it := range items {
 		if m, ok := it.(map[string]any); ok {
 			out.Items = append(out.Items, m)
@@ -466,6 +471,10 @@ func (e *Env) Catalogue(maxAge time.Duration) ([]Item, []Source) {
 		if c == nil {
 			continue
 		}
+		if e.pulled == nil {
+			e.pulled = map[string][]Pull{}
+		}
+		e.pulled[source] = idx.Pulled
 		for _, raw := range idx.Items {
 			id, kindName := str(raw, "id"), str(raw, "kind")
 			kind, ok := KindOf(kindName)
@@ -483,6 +492,7 @@ func (e *Env) Catalogue(maxAge time.Duration) ([]Item, []Source) {
 			}
 			item["source"] = source
 			item["sourceName"] = state.Name
+			item["blocked"] = e.pulledFor(source, id, str(raw, "version"))
 			item["packageUrl"] = join(c.URL, str(raw, "package"))
 			// Only a local index may point at local files.
 			if strings.HasPrefix(str(item, "packageUrl"), "file:") && !strings.HasPrefix(c.URL, "file:") {
@@ -589,8 +599,10 @@ func (e *Env) Annotate(items []Item) []Item {
 			ok = false // deleted by hand
 		}
 		item["installed"] = ""
+		item["installedBlocked"] = ""
 		if ok {
 			item["installed"] = r.Version
+			item["installedBlocked"] = e.pulledFor(r.Source, id, r.Version)
 		}
 		item["update"] = ok && newer(str(item, "version"), r.Version)
 		item["compatible"] = str(item, "minInir") == "" || !newer(str(item, "minInir"), current)
@@ -613,7 +625,8 @@ func (e *Env) Annotate(items []Item) []Item {
 		}
 		items = append(items, Item{"id": id, "kind": r.Kind, "name": name, "summary": "", "description": "",
 			"version": r.Version, "installed": r.Version, "update": false, "compatible": true, "conflict": false,
-			"orphan": true, "authors": []any{}, "tags": []any{}, "permissions": []any{}, "families": []any{},
+			"orphan": true, "blocked": "", "installedBlocked": e.pulledFor(r.Source, id, r.Version),
+			"authors": []any{}, "tags": []any{}, "permissions": []any{}, "families": []any{},
 			"surfaces": []any{}, "previewUrl": "", "source": r.Source})
 	}
 	return items
@@ -632,7 +645,7 @@ func find(id string, items []Item) (Item, error) {
 func Updates(items []Item) int {
 	n := 0
 	for _, item := range items {
-		if item["update"] == true && item["compatible"] == true {
+		if item["update"] == true && item["compatible"] == true && str(item, "blocked") == "" {
 			n++
 		}
 	}
@@ -947,6 +960,8 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 			return results, fail(ExitConflict, "%s already exists and was not installed from the hub; rename or remove it first", at)
 		case item["compatible"] != true:
 			return results, fail(ExitIncompatible, "%s needs iNiR %s (this is %s); run: inir update", str(item, "name"), str(item, "minInir"), e.Version)
+		case str(item, "blocked") != "" && str(item, "installed") != str(item, "version"):
+			return results, fail(ExitPulled, "%s %s was pulled from the hub: %s", str(item, "name"), str(item, "version"), str(item, "blocked"))
 		}
 		from := str(item, "installed")
 		if from != "" && item["update"] != true {
@@ -1020,6 +1035,8 @@ func (e *Env) Fetch(ids []string, version string) ([]Result, error) {
 			return fail(ExitUnknown, "%s is no longer listed in any hub source; remove it with: inir hub remove %s", id, id)
 		case item["compatible"] != true:
 			return fail(ExitIncompatible, "%s needs iNiR %s (this is %s); run: inir update", str(item, "name"), str(item, "minInir"), e.Version)
+		case str(item, "blocked") != "":
+			return fail(ExitPulled, "%s %s was pulled from the hub: %s", str(item, "name"), str(item, "version"), str(item, "blocked"))
 		}
 		for _, need := range strs(item, "requires") {
 			if err := get(need); err != nil {
@@ -1088,7 +1105,7 @@ func (e *Env) Update(ids []string) ([]Result, error) {
 	items := e.Annotate(raw)
 	if len(ids) == 0 {
 		for _, item := range items {
-			if item["update"] == true && item["compatible"] == true {
+			if item["update"] == true && item["compatible"] == true && str(item, "blocked") == "" {
 				ids = append(ids, str(item, "id"))
 			}
 		}
