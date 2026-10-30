@@ -57,15 +57,22 @@ type Stats struct {
 	Discussion string `json:"discussion"`
 }
 
+// stats reads stats.json at the root, else the one the stats workflow keeps on the "stats" branch.
 func (r *Repo) stats() map[string]Stats {
-	out := map[string]Stats{}
-	if b, err := os.ReadFile(filepath.Join(r.Root, "stats.json")); err == nil {
-		var f struct{ Items map[string]Stats }
-		if json.Unmarshal(b, &f) == nil {
-			out = f.Items
+	b, err := os.ReadFile(filepath.Join(r.Root, "stats.json"))
+	if err != nil {
+		for _, ref := range []string{"origin/stats", "stats"} {
+			if out := r.git("show", ref+":stats.json"); out != "" {
+				b = []byte(out)
+				break
+			}
 		}
 	}
-	return out
+	var f struct{ Items map[string]Stats }
+	if len(b) == 0 || json.Unmarshal(b, &f) != nil || f.Items == nil {
+		return map[string]Stats{}
+	}
+	return f.Items
 }
 
 // store fills an index item with what the store knows about it.

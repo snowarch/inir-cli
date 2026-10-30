@@ -494,6 +494,9 @@ func (e *Env) Catalogue(maxAge time.Duration) ([]Item, []Source) {
 			item["sourceName"] = state.Name
 			item["blocked"] = e.pulledFor(source, id, str(raw, "version"))
 			item["packageUrl"] = join(c.URL, str(raw, "package"))
+			if d := str(raw, "download"); strings.HasPrefix(d, "https://") {
+				item["downloadUrl"] = d
+			}
 			// Only a local index may point at local files.
 			if strings.HasPrefix(str(item, "packageUrl"), "file:") && !strings.HasPrefix(c.URL, "file:") {
 				continue
@@ -721,9 +724,16 @@ func (e *Env) download(item Item, kind Kind) ([]byte, error) {
 		return b, nil
 	}
 	limit, _, _ := kind.limits()
-	data, err := e.fetch(str(item, "packageUrl"), limit)
-	if err != nil {
-		return nil, err
+	// The counted copy first (the packages release); the one beside the index if it isn't there yet.
+	var data []byte
+	err := fail(ExitNetwork, "no download")
+	if d := str(item, "downloadUrl"); d != "" {
+		data, err = e.fetch(d, limit)
+	}
+	if err != nil || sum(data) != want {
+		if data, err = e.fetch(str(item, "packageUrl"), limit); err != nil {
+			return nil, err
+		}
 	}
 	if sum(data) != want {
 		return nil, fail(ExitIntegrity, "%s: package does not match the checksum the hub lists; nothing was installed", str(item, "id"))

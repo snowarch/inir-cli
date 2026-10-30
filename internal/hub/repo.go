@@ -81,6 +81,9 @@ type Repo struct {
 	Errors   []string
 	Warnings []string
 	Fix      bool // validate --fix writes the qmldir files a plugin lacks
+	// PackagesAt is where build says each package can also be downloaded (the packages release, whose
+	// download counts are the hub's downloads); clients fall back to the package beside the index.
+	PackagesAt string
 
 	ignoredFiles map[string]bool
 }
@@ -790,6 +793,9 @@ func (r *Repo) Build(out string) (int, error) {
 		item := e.item
 		item["preview"], item["package"], item["sha256"] = preview, pkg, hex.EncodeToString(sum[:])
 		item["size"], item["updated"], item["path"] = len(data), updated, folder
+		if r.PackagesAt != "" {
+			item["download"] = strings.TrimSuffix(r.PackagesAt, "/") + "/" + e.id + "-" + version + ".tar.gz"
+		}
 		if featured[e.id] {
 			item["featured"] = true
 		}

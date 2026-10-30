@@ -130,6 +130,7 @@ var Commands = []Command{
 		{Name: "install", Desc: "Install items"},
 		{Name: "update", Desc: "Update items, or all"},
 		{Name: "remove", Desc: "Remove items"},
+		{Name: "rate", Desc: "Vote an item up or down, or clear your vote"},
 		{Name: "sync", Desc: "Fetch the catalogue"},
 		{Name: "status", Desc: "Catalogue age and source", Flags: []Flag{
 			{Name: "--max-age", Desc: "Fetch if older than this", Value: "SECONDS"},
@@ -143,7 +144,16 @@ var Commands = []Command{
 			{Name: "--markdown", Desc: "As Markdown, for a pull request's summary"}}},
 		{Name: "bumps", Desc: "Changed items raise their version"},
 		{Name: "new", Desc: "Start an item from a template"},
-		{Name: "build", Desc: "Build a hub repo's catalogue"},
+		{Name: "build", Desc: "Build a hub repo's catalogue", Flags: []Flag{
+			{Name: "--out", Desc: "Folder to write (default dist)", Value: "DIR"},
+			{Name: "--packages-at", Desc: "Where each package is also downloaded and counted", Value: "URL"}}},
+		{Name: "stats", Desc: "Gather downloads and votes into stats.json", Flags: []Flag{
+			{Name: "--repo", Desc: "The hub on GitHub (default snowarch/inir-hub)", Value: "OWNER/NAME"},
+			{Name: "--category", Desc: "Discussion category whose threads carry the votes", Value: "SLUG"},
+			{Name: "--open", Desc: "Start a thread for items without one"},
+			{Name: "--out", Desc: "File to write (default stats.json)", Value: "FILE"}}},
+		{Name: "submit", Desc: "Send an item to the hub as a pull request", Flags: []Flag{
+			{Name: "--dry-run", Desc: "Check it and print the steps, run none"}}},
 		{Name: "preview", Desc: "Frame a widget's preview"}}},
 	{Name: "bind", Desc: "Make a Niri keybind for any inir call"},
 	{Name: "completions", Desc: "Shell completions", Subs: []Sub{

@@ -25,6 +25,7 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   remove ID...
   fetch ID... [--for VERSION]           download into the cache only, checked against that iNiR version
   link DIR...                           link a plugin folder of your own into the shell, to work on it
+  rate ID up|down|clear                 vote on an item (through gh, else its reviews page opens)
   open [ID]                             the Hub page in your family's Settings, at one item if given
   refresh | changed KIND                ask the running shell to read the hub again
 
@@ -33,7 +34,12 @@ In a hub repo:
   audit [ITEM_DIR...] [--markdown]      what each item may do, runs, reaches and touches, and its quality score
   bumps [--base REF]                    changed items must raise their version (default origin/main)
   new KIND ID [--author GH]             start an item from templates/KIND
-  build [--out DIR]                     index.json, packages, previews, gallery (default dist)
+  build [--out DIR] [--packages-at URL] index.json, packages, previews, gallery (default dist); URL: where each
+                                        package is also downloaded and counted (the packages release)
+  stats [--repo OWNER/NAME] [--category SLUG] [--open] [--out FILE]
+                                        downloads from the packages release, votes from each item's Discussion in
+                                        that category (--open starts the missing ones) into stats.json
+  submit ITEM_DIR [--dry-run]           check an item, commit it on a branch, push to your fork, open the pull request
   preview ITEM_DIR --shot SCREENSHOT     1280x800, cropped to fill
   preview ITEM_DIR --wallpaper IMG [--shot PNG] [--side left|right]  a widget on a wallpaper
 
@@ -53,8 +59,20 @@ func runHub(args []string) (int, bool) {
 	case "", "-h", "--help", "help":
 		fmt.Println(hubUsage)
 		return 0, true
-	case "validate", "audit", "bumps", "new", "build", "preview":
+	case "validate", "audit", "bumps", "new", "build", "preview", "stats", "submit":
 		return runHubRepo(verb, rest, asJSON), true
+	case "rate":
+		if len(rest) != 2 {
+			fmt.Fprintln(os.Stderr, "usage: inir hub rate ID up|down|clear")
+			return 2, true
+		}
+		line, err := hub.Default().Rate(rest[0], rest[1])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
+			return hub.Code(err), true
+		}
+		fmt.Println(line)
+		return 0, true
 	case "status", "sources", "sync", "list", "search", "info", "install", "update", "remove", "fetch", "link":
 	default:
 		return 0, false
@@ -393,7 +411,40 @@ func runHubRepo(verb string, args []string, asJSON bool) int {
 		fmt.Println("created " + dest)
 		fmt.Println("next: edit it, add preview.webp, then: inir hub validate " + dest)
 		return 0
+	case "stats":
+		target, category := flag("--repo", hub.HubRepo), flag("--category", "")
+		out := flag("--out", repo.Root+"/stats.json")
+		stats, err := repo.Gather(hub.GitHubFromEnv(), target, category, slices.Contains(args, "--open"))
+		repo.Report()
+		if err == nil {
+			err = hub.WriteStats(out, stats)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
+			return hub.Code(err)
+		}
+		fmt.Printf("stats for %d item(s) into %s\n", len(stats), out)
+		return 0
+	case "submit":
+		dry := slices.Contains(args, "--dry-run")
+		args = slices.DeleteFunc(args, func(a string) bool { return a == "--dry-run" })
+		if len(args) != 1 {
+			fmt.Fprintln(os.Stderr, "usage: inir hub submit ITEM_DIR [--dry-run]")
+			return 2
+		}
+		err := repo.Submit(args[0], dry, func(line string) { fmt.Println(line) })
+		repo.Report()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
+			return hub.Code(err)
+		}
+		return 0
 	case "build":
+		repo.PackagesAt = flag("--packages-at", "")
+		if repo.PackagesAt != "" && !strings.HasPrefix(repo.PackagesAt, "https://") {
+			fmt.Fprintln(os.Stderr, "inir hub: --packages-at takes an https:// address")
+			return 2
+		}
 		out := flag("--out", repo.Root+"/dist")
 		n, err := repo.Build(out)
 		repo.Report()
