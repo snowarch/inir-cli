@@ -16,7 +16,7 @@ import (
 )
 
 // Roots are the config sections a look is made of.
-var Roots = []string{"panelFamily", "appearance", "background", "bar", "dock", "iris", "waffles", "lock"}
+var Roots = []string{"panelFamily", "appearance", "background", "material", "iris", "waffles", "lock"}
 
 // Inside the roots, what is someone's own rather than their look.
 var mine = map[string]bool{
@@ -28,7 +28,7 @@ var mine = map[string]bool{
 	"waffles.behavior": true,
 }
 
-var mineKey = regexp.MustCompile(`(?i)(path|^pinnedApps|^pinnedItems|^screenList|^city|^screenCastOutput|^ignoredAppRegexes)$`)
+var mineKey = regexp.MustCompile(`(?i)(path|^pinnedItems|^screenList|^city|^screenCastOutput)$`)
 
 func personal(path []string) bool {
 	if mineKey.MatchString(path[len(path)-1]) {

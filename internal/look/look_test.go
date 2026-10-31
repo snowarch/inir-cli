@@ -31,24 +31,26 @@ func TestFormatKeepsOrderAndNumbers(t *testing.T) {
 }
 
 const defaults = `{"panelFamily":"ii","ai":{"key":""},
- "appearance":{"globalStyle":"material","recentThemes":[],"palette":{"type":"auto","accentColor":""}},
+ "appearance":{"recentThemes":[],"palette":{"type":"auto","accentColor":""}},
  "background":{"wallpaperPath":"","effects":{"blur":0}},
- "dock":{"pinnedApps":["kitty"],"iconSize":40},
+ "apps":{"pinned":["kitty"]},
+ "material":{"style":{"globalStyle":"material"},"dock":{"iconSize":40}},
  "iris":{"appearance":{"design":"iris","texture":"solid"},"anime":{"following":[]}}}`
 
 func TestExportImportRoundTrip(t *testing.T) {
 	def := obj(t, defaults)
 	mine := obj(t, `{"panelFamily":"iris","ai":{"key":"secret"},
-	 "appearance":{"globalStyle":"material","recentThemes":["a"],"palette":{"type":"scheme-tonal-spot","accentColor":"#ff0066"}},
+	 "appearance":{"recentThemes":["a"],"palette":{"type":"scheme-tonal-spot","accentColor":"#ff0066"}},
 	 "background":{"wallpaperPath":"/home/x/Pictures/wallhaven-abc123.jpg","effects":{"blur":30}},
-	 "dock":{"pinnedApps":["firefox"],"iconSize":48},
+	 "apps":{"pinned":["firefox"]},
+	 "material":{"style":{"globalStyle":"material"},"dock":{"iconSize":48}},
 	 "iris":{"appearance":{"design":"airisu","texture":"solid"},"anime":{"following":["frieren"]}}}`)
 	f := Export(mine, def)
 	if f.Family != "iris" || f.Design != "airisu" || f.Wallpaper.URL != "https://w.wallhaven.cc/full/ab/wallhaven-abc123.jpg" {
 		t.Fatalf("file %+v", f)
 	}
 	got := Compact(f.Config)
-	want := `{"panelFamily":"iris","appearance":{"palette":{"type":"scheme-tonal-spot","accentColor":"#ff0066"}},"background":{"effects":{"blur":30}},"dock":{"iconSize":48},"iris":{"appearance":{"design":"airisu"}}}`
+	want := `{"panelFamily":"iris","appearance":{"palette":{"type":"scheme-tonal-spot","accentColor":"#ff0066"}},"background":{"effects":{"blur":30}},"material":{"dock":{"iconSize":48}},"iris":{"appearance":{"design":"airisu"}}}`
 	if got != want {
 		t.Fatalf("delta\n%s\nwant\n%s", got, want)
 	}
@@ -58,9 +60,10 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 
 	theirs := obj(t, `{"panelFamily":"waffle","ai":{"key":"theirs"},
-	 "appearance":{"globalStyle":"angel","recentThemes":["b"],"palette":{"type":"auto","accentColor":""}},
+	 "appearance":{"recentThemes":["b"],"palette":{"type":"auto","accentColor":""}},
 	 "background":{"wallpaperPath":"/theirs.png","effects":{"blur":5}},
-	 "dock":{"pinnedApps":["code"],"iconSize":40},
+	 "apps":{"pinned":["code"]},
+	 "material":{"style":{"globalStyle":"angel"},"dock":{"iconSize":40}},
 	 "iris":{"appearance":{"design":"iris","texture":"paper"},"anime":{"following":["one piece"]}}}`)
 	changes, skips := Apply(theirs, def, back)
 	if len(skips) != 0 {
@@ -71,8 +74,8 @@ func TestExportImportRoundTrip(t *testing.T) {
 		t.Errorf("after import\n%s", Compact(Export(theirs, def).Config))
 	}
 	for path, want := range map[string]string{"ai.key": `"theirs"`, "appearance.recentThemes": `["b"]`,
-		"background.wallpaperPath": `"/theirs.png"`, "dock.pinnedApps": `["code"]`, "iris.anime.following": `["one piece"]`,
-		"appearance.globalStyle": `"material"`, "iris.appearance.texture": `"solid"`} {
+		"background.wallpaperPath": `"/theirs.png"`, "apps.pinned": `["code"]`, "iris.anime.following": `["one piece"]`,
+		"material.style.globalStyle": `"material"`, "iris.appearance.texture": `"solid"`} {
 		v, _ := theirs.At(strings.Split(path, ".")...)
 		if Compact(v) != want {
 			t.Errorf("%s = %s, want %s", path, Compact(v), want)
@@ -86,13 +89,13 @@ func TestExportImportRoundTrip(t *testing.T) {
 func TestImportRefusesWhatIsNotALook(t *testing.T) {
 	def := obj(t, defaults)
 	f, err := Read([]byte(`{"inirLook":1,"family":"ii","config":{"apps":{"terminal":"rm -rf ~"},
-	 "dock":{"iconSize":"huge","pinnedApps":["evil"]},"appearance":{"globalStyle":"angel"}}}`))
+	 "material":{"dock":{"iconSize":"huge"},"style":{"globalStyle":"angel"}},"background":{"wallpaperPath":"/evil.png"}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := obj(t, `{"apps":{"terminal":"kitty"},"dock":{"iconSize":40,"pinnedApps":["kitty"]}}`)
+	cfg := obj(t, `{"apps":{"terminal":"kitty","pinned":["kitty"]},"material":{"dock":{"iconSize":40}}}`)
 	_, skips := Apply(cfg, def, f)
-	if Compact(cfg) != `{"apps":{"terminal":"kitty"},"dock":{"iconSize":40,"pinnedApps":["kitty"]},"panelFamily":"ii","appearance":{"globalStyle":"angel","palette":{"type":"auto","accentColor":""}},"background":{"effects":{"blur":0}},"iris":{"appearance":{"design":"iris","texture":"solid"}}}` {
+	if Compact(cfg) != `{"apps":{"terminal":"kitty","pinned":["kitty"]},"material":{"dock":{"iconSize":40},"style":{"globalStyle":"angel"}},"panelFamily":"ii","appearance":{"palette":{"type":"auto","accentColor":""}},"background":{"effects":{"blur":0}},"iris":{"appearance":{"design":"iris","texture":"solid"}}}` {
 		t.Errorf("cfg %s", Compact(cfg))
 	}
 	if len(skips) != 3 {
