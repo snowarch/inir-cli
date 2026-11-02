@@ -17,10 +17,34 @@ import (
 	"github.com/snowarch/inir-cli/internal/look"
 )
 
-// Dirs are where a run looks: the shell's scripts/colors and what it holds.
+// Dirs are where a run looks: the shell's scripts/colors and what it holds, and the shell's modules/, where each
+// installed plugin may bring targets of its own (modules/<plugin>/colors/targets, its scripts in colors/modules).
 type Dirs struct {
 	Colors, Targets, Modules string
+	Plugins                  string
 	Config                   string // config.json, for the gates targets declare
+}
+
+// All is every target: the shell's own, then each installed plugin's.
+func All(d Dirs) []*look.Object {
+	out := Load(d.Targets)
+	if d.Plugins != "" {
+		dirs, _ := filepath.Glob(filepath.Join(d.Plugins, "*", "colors", "targets"))
+		for _, dir := range dirs {
+			out = append(out, Load(dir)...)
+		}
+	}
+	return out
+}
+
+// modulesFor is the folder a target's module sits in: the shell's (or --modules-dir) for its own targets, the
+// modules/ beside a plugin's targets/ for a plugin's.
+func modulesFor(t *look.Object, d Dirs) string {
+	p := str(t, "manifestPath")
+	if p == "" || filepath.Dir(p) == filepath.Clean(d.Targets) {
+		return d.Modules
+	}
+	return filepath.Join(filepath.Dir(filepath.Dir(p)), "modules")
 }
 
 func generated(name string) string {
@@ -89,8 +113,8 @@ func Load(dir string) []*look.Object {
 	return out
 }
 
-func Find(dir, id string) *look.Object {
-	for _, t := range Load(dir) {
+func Find(d Dirs, id string) *look.Object {
+	for _, t := range All(d) {
 		if v, _ := t.Get("id"); v == id {
 			return t
 		}
@@ -112,7 +136,7 @@ func Inspect(t *look.Object, d Dirs) *look.Object {
 	info := clone(t)
 	modulePath := ""
 	if m := str(t, "module"); m != "" {
-		modulePath = join(d.Modules, m)
+		modulePath = join(modulesFor(t, d), m)
 	}
 	st, err := os.Stat(modulePath)
 	info.Set("modulePath", modulePath)

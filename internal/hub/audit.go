@@ -80,7 +80,7 @@ var urlRE = regexp.MustCompile(`https?://[A-Za-z0-9.\-]+(:\d+)?[^\s"'<>)]*`)
 
 // What may sit in an item besides code: pictures, fonts, sounds, text.
 var plainExt = []string{".webp", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".ttf", ".otf", ".woff", ".woff2",
-	".ogg", ".wav", ".mp3", ".flac", ".json", ".md", ".txt", ".conf", ".ini", ".toml", ".css", ".html", ".kdl", ".frag",
+	".ogg", ".wav", ".mp3", ".flac", ".json", ".jsonc", ".md", ".txt", ".conf", ".ini", ".toml", ".css", ".html", ".kdl", ".frag",
 	".vert", ".qsb", "", ".license"}
 
 // Generated-without-care tells. Each says what a reviewer saw; points add up to the score.

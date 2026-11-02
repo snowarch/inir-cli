@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -838,6 +839,26 @@ func (e *Env) link(id, provides, want string) error {
 	return nil
 }
 
+// applyColours runs the colour targets a plugin brings (colors/targets/<id>.json) once, through the shell's link, so
+// it wears the theme from the moment it lands rather than from the next wallpaper change.
+func (e *Env) applyColours(id, provides string) {
+	if e.Shell == "" || provides == "" {
+		return
+	}
+	script := filepath.Join(e.Shell, "scripts", "colors", "apply-targets.sh")
+	manifests, _ := filepath.Glob(filepath.Join(e.Shell, provides, "colors", "targets", "*.json"))
+	if len(manifests) == 0 || !exists(script) {
+		return
+	}
+	args := []string{script}
+	for _, m := range manifests {
+		args = append(args, strings.TrimSuffix(filepath.Base(m), ".json"))
+	}
+	if out, err := exec.Command("bash", args...).CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "inir hub: couldn't apply %s's colours: %s\n", id, strings.TrimSpace(string(out)))
+	}
+}
+
 // refreshShellFiles runs writeShellFiles as a best effort: a folder left without its qmldir costs stock Quickshell
 // that folder's types, while failing the link would leave it unrecorded (and an update without its family).
 func (e *Env) refreshShellFiles() {
@@ -1002,6 +1023,9 @@ func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 		at, err := e.place(item, kind, data)
 		if err != nil {
 			return results, err
+		}
+		if kind.Plugin {
+			e.applyColours(id, str(item, "provides"))
 		}
 		records[id] = Record{Kind: kind.Name, Version: str(item, "version"), SHA256: str(item, "sha256"),
 			Source: str(item, "source"), Name: str(item, "name"), Path: at, Installed: time.Now().Format("2006-01-02T15:04:05"),

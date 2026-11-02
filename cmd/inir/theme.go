@@ -152,7 +152,7 @@ func runTheme(args []string) (int, bool) {
 		colors = real
 	}
 	d := theme.Dirs{Colors: colors, Targets: filepath.Join(colors, "targets"), Modules: filepath.Join(colors, "modules"),
-		Config: opts["--config"]}
+		Plugins: filepath.Join(filepath.Dir(filepath.Dir(colors)), "modules"), Config: opts["--config"]}
 	if v := opts["--targets-dir"]; v != "" {
 		d.Targets = filepath.Clean(v)
 	}
@@ -170,7 +170,7 @@ func runTheme(args []string) (int, bool) {
 			fmt.Println("inspect requires a target id")
 			return 1, true
 		}
-		t := theme.Find(d.Targets, target)
+		t := theme.Find(d, target)
 		if t == nil {
 			fmt.Println("Unknown target: " + target)
 			return 1, true
@@ -180,7 +180,7 @@ func runTheme(args []string) (int, bool) {
 	case "doctor":
 		config := theme.LoadConfig(d.Config)
 		if target != "" {
-			t := theme.Find(d.Targets, target)
+			t := theme.Find(d, target)
 			if t == nil {
 				fmt.Println("Unknown target: " + target)
 				return 1, true
@@ -194,7 +194,7 @@ func runTheme(args []string) (int, bool) {
 		}
 		var results []any
 		code := 0
-		for _, t := range theme.Load(d.Targets) {
+		for _, t := range theme.All(d) {
 			r := theme.Doctor(t, d, config)
 			results = append(results, r)
 			if s, _ := r.Get("status"); s == "error" {
@@ -223,7 +223,7 @@ func runTheme(args []string) (int, bool) {
 		}
 		return code, true
 	}
-	targets := theme.Load(d.Targets)
+	targets := theme.All(d)
 	if asJSON {
 		all := []any{}
 		for _, t := range targets {
