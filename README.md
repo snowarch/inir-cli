@@ -2,7 +2,7 @@
 
 The `inir` command for the [iNiR](https://github.com/snowarch/iNiR) shell, as one Go binary.
 
-It does three things itself and hands every other command to the shell's `scripts/inir`:
+It is the front door: what it knows it does itself, and every other command goes to the shell's `scripts/inir`.
 
 - **IPC calls** to a running shell (`inir <target> <function> [args]`), about three times
   faster than through the bash launcher.
@@ -14,11 +14,14 @@ It does three things itself and hands every other command to the shell's `script
   `inir doctor --check` changes nothing, `--json` prints the report. A plain `inir doctor`
   repairs through the bash doctor, one failing step at a time (`setup doctor --only=N`), so
   the repairs are the same code as before.
-
-It also plans installs: `inir deps plan [--distro D] [--no-audio ...] [--json]` reads the
-shell's `sdata/deps.toml` (what iNiR installs per distro and install group) and prints the
-packages, AUR packages and providers a full install would use. Running that plan, and the
-rest of install and update, moves here next.
+- **The hub**: `inir hub` finds, installs, updates and removes what people make, and holds
+  the tools the hub repo runs on itself (`validate`, `audit`, `bumps`, `build`, `new`,
+  `submit`).
+- **Packages**: `inir deps plan [--distro D] [--no-audio ...] [--json]` reads the shell's
+  `sdata/deps.toml` (what iNiR installs per distro and install group) and prints the packages,
+  AUR packages and providers a full install would use; `inir deps install` runs that plan.
+- **Install and update wizards**: at a terminal and without `-y`, `inir install` and
+  `inir update` put a wizard in front of `setup`, which still does the work.
 
 
 ## Long commands and your look
@@ -52,7 +55,8 @@ the families, themes and widgets you install, served at [inir.space/hub](https:/
 The binary goes next to the bash launcher, not in place of it: `scripts/inir` looks for it at
 `$INIR_CLI`, `~/.local/share/inir/cli/inir`, `/usr/local/lib/inir/inir` and
 `/usr/lib/inir/inir`, execs it, and the binary execs the same launcher back for what it does
-not do. Without the binary, or with `INIR_NO_CLI=1`, nothing changes. The shell repo's
+not do. Without the binary, or with `INIR_NO_CLI=1`, the launcher still runs the shell and its
+IPC; the hub and tab completion need the binary. The shell repo's
 `docs/adr/0006-cli-binary-behind-the-bash-launcher.md` has the whole design.
 
 It reads the shell's IPC surface from `scripts/lib/ipc.json`, which the shell repo generates.
