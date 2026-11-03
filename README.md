@@ -15,8 +15,9 @@ It is the front door: what it knows it does itself, and every other command goes
   repairs through the bash doctor, one failing step at a time (`setup doctor --only=N`), so
   the repairs are the same code as before.
 - **The hub**: `inir hub` finds, installs, updates and removes what people make, and holds
-  the tools the hub repo runs on itself (`validate`, `audit`, `bumps`, `build`, `new`,
-  `submit`).
+  the tools the hub repo runs on itself (`new`, `check`, `validate`, `audit`, `bumps`,
+  `build`, `submit`). `inir hub check` is what a pull request must pass, run on the
+  author's machine first.
 - **Packages**: `inir deps plan [--distro D] [--no-audio ...] [--json]` reads the shell's
   `sdata/deps.toml` (what iNiR installs per distro and install group) and prints the packages,
   AUR packages and providers a full install would use; `inir deps install` runs that plan.
