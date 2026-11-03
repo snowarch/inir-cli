@@ -18,6 +18,12 @@ const HubRepo = "snowarch/inir-hub"
 func (r *Repo) Submit(dir string, dryRun bool, say func(string)) error {
 	abs, _ := filepath.Abs(dir)
 	entries := r.Validate([]string{abs})
+	// What CI checks on the item itself (Check): its contracts, and against main its version and the lines it adds.
+	r.contracts(abs)
+	if since := r.git("merge-base", "origin/main", "HEAD"); since != "" {
+		r.bumped("origin/main", r.rel(abs))
+		r.addedLines(since, r.rel(abs))
+	}
 	if len(r.Errors) > 0 {
 		return fail(ExitError, "%d error(s): fix them before submitting", len(r.Errors))
 	}

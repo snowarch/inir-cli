@@ -139,6 +139,8 @@ var Commands = []Command{
 		{Name: "open", Desc: "Open the hub page, or one item"},
 		{Name: "refresh", Desc: "Tell the shell to read the hub again"},
 		{Name: "changed", Desc: "Tell the shell a kind changed"},
+		{Name: "check", Desc: "What CI runs on a pull request, run before sending it", Flags: []Flag{
+			{Name: "--base", Desc: "The branch it goes into (default origin/main)", Value: "REF"}}},
 		{Name: "validate", Desc: "Check a hub repo's items"},
 		{Name: "audit", Desc: "What each item may do, reaches, and its quality score", Flags: []Flag{
 			{Name: "--markdown", Desc: "As Markdown, for a pull request's summary"}}},

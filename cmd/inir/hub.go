@@ -30,9 +30,12 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   refresh | changed KIND                ask the running shell to read the hub again
 
 In a hub repo:
+  check [--base REF]                    what CI runs on a pull request: one item changed, valid, version raised,
+                                        IPC documented, every language whole, the added lines on the family's
+                                        tokens (default origin/main). Run it until it prints nothing to fix
   validate [--fix] [ITEM_DIR...]        check every item, or the given ones (--fix writes missing qmldir files)
   audit [ITEM_DIR...] [--markdown]      what each item may do, runs, reaches and touches, and its quality score
-  bumps [--base REF]                    changed items must raise their version (default origin/main)
+  bumps [--base REF]                    changed items must raise their version (default origin/main; check does it too)
   new KIND ID [--author GH]             start an item from templates/KIND
   build [--out DIR] [--packages-at URL] index.json, packages, previews, gallery (default dist); URL: where each
                                         package is also downloaded and counted (the packages release)
@@ -59,7 +62,7 @@ func runHub(args []string) (int, bool) {
 	case "", "-h", "--help", "help":
 		fmt.Println(hubUsage)
 		return 0, true
-	case "validate", "audit", "bumps", "new", "build", "preview", "stats", "submit":
+	case "check", "validate", "audit", "bumps", "new", "build", "preview", "stats", "submit":
 		return runHubRepo(verb, rest, asJSON), true
 	case "rate":
 		if len(rest) != 2 {
@@ -389,6 +392,22 @@ func runHubRepo(verb string, args []string, asJSON bool) int {
 		if len(repo.Errors) > 0 {
 			return 1
 		}
+		return 0
+	case "check":
+		entries := repo.Check(flag("--base", "origin/main"))
+		repo.Report()
+		if len(repo.Errors) > 0 {
+			fmt.Fprintf(os.Stderr, "%d to fix\n", len(repo.Errors))
+			return 1
+		}
+		line := "nothing to fix"
+		if len(entries) == 1 {
+			line = fmt.Sprintf("%s: nothing to fix", repo.Rel(entries[0].Folder()))
+		}
+		if len(repo.Warnings) > 0 {
+			line += fmt.Sprintf(" (%d warning(s))", len(repo.Warnings))
+		}
+		fmt.Println(line)
 		return 0
 	case "bumps":
 		repo.Bumps(flag("--base", "origin/main"))
