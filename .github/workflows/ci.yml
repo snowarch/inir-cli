@@ -1,9 +1,12 @@
 name: ci
 
+# Every push tests and builds the release binary; the artifact is what `bin/ci-take cli` (inir-eco) puts live, so
+# nothing compiles on the maintainer's machine.
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,3 +34,12 @@ jobs:
           version: "~> v2"
           args: release --snapshot --clean
       - run: dist/inir_linux_amd64_v1/inir cli version
+      - name: The binary, for the maintainer's desktop
+        run: |
+          mkdir -p out && cp dist/inir_linux_amd64_v1/inir out/inir
+          (cd out && sha256sum inir > inir.sha256)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inir-linux-amd64
+          retention-days: 30
+          path: out/
