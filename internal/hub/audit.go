@@ -193,6 +193,9 @@ func (r *Repo) audit(e *entry, folder, hubFile string, hub map[string]any, decla
 		}
 		if (ext == ".sh" || ext == ".py" || ext == ".fish") && e.kind.Name != "webapp" {
 			found["process"] = true
+			if scriptWrites(ext, b) {
+				found["files"] = true
+			}
 		}
 		src := string(b)
 		fileLines := strings.Split(src, "\n")
@@ -530,6 +533,38 @@ var fileViewRE, folderModelRE = regexp.MustCompile(`\bFileView\s*\{`), regexp.Mu
 
 // ownOptionsOnly: every FileView in the file reads the item's own options file (Directories.pluginFile("<id>")), the
 // lane the base gives each plugin; that is no file outside its folder to declare.
+// A script writes files with its own language's words, which the QML detector never sees: a shell redirect to a file,
+// cp, mv, rm, ln, tee, touch, mkdir, rsync or sed -i; Python's open() for writing, write_text, os and shutil.
+var (
+	shRedirectRE = regexp.MustCompile(`(?:^|[^0-9&<>=\-])>>?\s*([^\s;|&()<>]+)`)
+	shWriteRE    = regexp.MustCompile(`(?:^|[\s;|&(]|\$\()(?:cp|mv|rm|ln|tee|touch|mkdir|rsync|truncate)\s|\bsed\s+(?:-[a-zA-Z]*i|--in-place)`)
+	pyWriteRE    = regexp.MustCompile(`\bopen\([^)]*,\s*(?:mode\s*=\s*)?['"][^'"]*[wax+]|\.write_(?:text|bytes)\(|\bos\.(?:remove|unlink|rename|replace|makedirs|mkdir|rmdir)\(|\bshutil\.\w+\(|\.(?:unlink|mkdir|rename|touch)\(`)
+)
+
+func scriptWrites(ext string, b []byte) bool {
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "#") {
+			continue
+		}
+		if ext == ".py" {
+			if pyWriteRE.MatchString(t) {
+				return true
+			}
+			continue
+		}
+		if shWriteRE.MatchString(t) {
+			return true
+		}
+		for _, m := range shRedirectRE.FindAllStringSubmatch(t, -1) {
+			if target := strings.Trim(m[1], `"'`); !strings.HasPrefix(target, "&") && target != "/dev/null" && target != "/dev/stderr" && target != "/dev/stdout" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func ownOptionsOnly(b []byte, id string) bool {
 	own := regexp.MustCompile(`\bpath\s*:\s*Directories\.pluginFile\(\s*"` + regexp.QuoteMeta(id) + `"\s*\)`)
 	views := len(fileViewRE.FindAll(b, -1))

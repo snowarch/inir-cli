@@ -167,3 +167,30 @@ func TestAuditSlop(t *testing.T) {
 		t.Errorf("a reviewed version still refused: %v", r.Errors)
 	}
 }
+
+func TestAuditSeesScriptWrites(t *testing.T) {
+	writes := map[string]string{
+		"a.sh":   "#!/bin/sh\necho x > \"$XDG_CONFIG_HOME/app/conf\"\n",
+		"b.sh":   "#!/bin/sh\ncp -p \"$f\" \"$f.bak\"\n",
+		"c.sh":   "#!/bin/sh\nsed -i 's/a/b/' ~/.config/app.ini\n",
+		"d.sh":   "#!/bin/sh\nprintf '%s' x >> ~/.local/state/w/log\n",
+		"e.py":   "#!/usr/bin/env python3\nopen(p, 'w').write(x)\n",
+		"f.py":   "#!/usr/bin/env python3\nimport shutil\nshutil.copy(a, b)\n",
+		"g.fish": "#!/usr/bin/env fish\nmkdir -p ~/.cache/w\n",
+	}
+	for name, body := range writes {
+		if !scriptWrites(filepath.Ext(name), []byte(body)) {
+			t.Errorf("%s writes files, not seen:\n%s", name, body)
+		}
+	}
+	reads := map[string]string{
+		"a.sh":   "#!/bin/sh\n# writes nothing: > ~/x in a comment\nfastfetch --config \"$c\" 2>/dev/null >&2\njq -r .x \"$f\" 2>&1\n[ \"$a\" = b ] && echo ok\n",
+		"b.py":   "#!/usr/bin/env python3\nprint(open(p).read())\nwith open(p, 'r') as f: pass\n",
+		"c.fish": "#!/usr/bin/env fish\nset -l x (cat $f)\necho $x\n",
+	}
+	for name, body := range reads {
+		if scriptWrites(filepath.Ext(name), []byte(body)) {
+			t.Errorf("%s only reads, seen as writing:\n%s", name, body)
+		}
+	}
+}
