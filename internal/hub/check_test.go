@@ -52,7 +52,12 @@ func checkRepo(t *testing.T) (*Repo, func(files map[string]string)) {
 
 // Check's errors; the cases assert on the pull request's own rules, the bare listings' errors pass by.
 func checkOnly(r *Repo) []string {
-	r.Check("origin/main")
+	r.Check("origin/main", true)
+	return r.Errors
+}
+
+func checkAs(r *Repo, maintainer bool) []string {
+	r.Check("origin/main", maintainer)
 	return r.Errors
 }
 
@@ -185,5 +190,72 @@ Item {
 	}
 	if has(errs, "Panel.qml:6") || has(errs, "Panel.qml:7") || has(errs, "FamStyle.qml") {
 		t.Fatalf("tokens, a said literal or the family's token file failed: %v", errs)
+	}
+}
+
+func TestCheckLanes(t *testing.T) {
+	// A family changes only from its maintainers.
+	r, write := checkRepo(t)
+	write(map[string]string{
+		"families/fam/Panel.qml": "import QtQuick\nItem { width: 3 }\n",
+		"families/fam/hub.json":  `{"version": "1.0.1"}`,
+	})
+	if errs := checkAs(r, false); !has(errs, "kept by its maintainers") {
+		t.Fatalf("a family change from outside passed: %v", errs)
+	}
+	r, write = checkRepo(t)
+	write(map[string]string{
+		"families/fam/Panel.qml": "import QtQuick\nItem { width: 3 }\n",
+		"families/fam/hub.json":  `{"version": "1.0.1"}`,
+	})
+	if errs := checkAs(r, true); has(errs, "kept by its maintainers") {
+		t.Fatalf("a maintainer's family change failed: %v", errs)
+	}
+
+	// A new item can't take an id another kind has.
+	r, write = checkRepo(t)
+	write(map[string]string{
+		"components/clock/hub.json":  `{"version": "1.0.0"}`,
+		"components/clock/Clock.qml": "import QtQuick\nItem {}\n",
+	})
+	if errs := checkAs(r, false); !has(errs, `the id "clock" is taken by widgets/clock`) {
+		t.Fatalf("a duplicate id passed: %v", errs)
+	}
+
+	// Outside families: no writes to the person's settings, IPC targets carry the id.
+	r, write = checkRepo(t)
+	write(map[string]string{
+		"widgets/clock/hub.json": `{"version": "1.0.1"}`,
+		"widgets/clock/Clock.qml": `import QtQuick
+import Quickshell.Io
+Item {
+    Component.onCompleted: Config.setNestedValue("appearance.globalStyle", "aurora")
+    function f() { Config.options.bar.vertical = true }
+    readonly property bool same: Config.options.bar.vertical == true
+    /// Clock.
+    IpcHandler {
+        target: "mpris"
+        /// Play
+        function play(): void {}
+    }
+    /// Its own.
+    IpcHandler {
+        target: "clockFace"
+        /// Show
+        function show(): void {}
+    }
+}
+`,
+	})
+	errs := checkAs(r, false)
+	for _, want := range []string{"Clock.qml:4: writes the person's settings", "Clock.qml:5: writes the person's settings", `Clock.qml:9: IPC target "mpris"`} {
+		if !has(errs, want) {
+			t.Errorf("missing %q in %v", want, errs)
+		}
+	}
+	for _, not := range []string{"Clock.qml:6:", `"clockFace"`} {
+		if has(errs, not) {
+			t.Errorf("flagged %q: %v", not, errs)
+		}
 	}
 }

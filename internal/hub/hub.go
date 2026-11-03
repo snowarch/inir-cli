@@ -125,6 +125,9 @@ func validID(k Kind, id string) bool {
 	return idRE.MatchString(id)
 }
 
+// baseModules: inir's own folders under modules/, where no plugin may land.
+var baseModules = []string{"background", "common", "shared"}
+
 // validProvides: where a plugin links in the shell, modules/<a>[/<b>...], never a path the index aims elsewhere.
 func validProvides(p string) bool {
 	parts := strings.Split(p, "/")

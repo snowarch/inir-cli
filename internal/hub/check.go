@@ -22,7 +22,9 @@ import (
 //
 // Rules about lines look only at what the branch adds, so code already in the hub never fails someone else's pull
 // request. Every failure says what to do instead.
-func (r *Repo) Check(base string) []*entry {
+// maintainer: the pull request comes from someone who keeps the hub (CI passes it for the repo's owner, members and
+// collaborators). Families are the desktops every install gets; only they change them.
+func (r *Repo) Check(base string, maintainer bool) []*entry {
 	since := r.git("merge-base", base, "HEAD")
 	if since == "" {
 		r.errorf(r.Root, "%s is not here: run `git fetch origin main` (or pass --base REF)", base)
@@ -73,11 +75,82 @@ func (r *Repo) Check(base string) []*entry {
 		return nil // removed: a maintainer's call, nothing of it left to check
 	}
 
+	kindDir := strings.Split(item, "/")[0]
+	if kindDir == "families" && !maintainer {
+		r.errorf(folder, "%s is the desktop every iNiR install gets, kept by its maintainers: a pull request from outside does not change it. Build what you want to add as its own component (components/<id>, CONTRIBUTING.md › Adding to a family); a fix to the family goes in an issue", item)
+	}
+	if r.git("ls-tree", "--name-only", since, "--", item) == "" {
+		r.newID(item, id)
+	}
+
 	entries := r.Validate([]string{folder})
 	r.bumped(base, item)
 	r.contracts(folder)
+	if kindDir != "families" {
+		r.ownLane(folder, id)
+	}
 	r.addedLines(since, item)
 	return entries
+}
+
+// newID: a new item's id is its own in the whole hub (a component and a widget both called "clock" would both be
+// asked for by name), and a plugin's is not a folder of the base, where it would land at modules/<id>.
+func (r *Repo) newID(item, id string) {
+	for _, k := range Kinds {
+		if other := k.Dir + "/" + id; other != item && isDir(filepath.Join(r.Root, other)) {
+			r.errorf(filepath.Join(r.Root, item), "the id %q is taken by %s: pick another name for the folder", id, other)
+		}
+	}
+}
+
+// ownLane: an item that is not a family lives beside the shell, never in it. It keeps its options to itself (a
+// widget's in widget.json, a component's in its own files) instead of writing the person's settings, and its IPC
+// targets carry its id, so it can't answer for the base or another plugin.
+func (r *Repo) ownLane(folder, id string) {
+	want := laneKey(id)
+	for _, p := range filesOf(folder) {
+		ext := filepath.Ext(p)
+		if ext != ".qml" && ext != ".js" {
+			continue
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			code := line
+			if j := strings.Index(line, "//"); j >= 0 && !strings.Contains(line[:j], `"`) {
+				code = line[:j]
+			}
+			where := fmt.Sprintf("%s:%d", p, i+1)
+			if configWriteRE.MatchString(code) {
+				r.errorf(where, "writes the person's settings: only families do. Keep your options in your item (widget.json \"options\", or a file of your own) so removing it leaves their shell as it was")
+			}
+			if m := targetRE.FindStringSubmatch(code); m != nil && !strings.HasPrefix(laneKey(m[1]), want) {
+				r.errorf(where, "IPC target %q: start it with your id (%q), so it never answers for the shell or another plugin", m[1], lowerCamel(id))
+			}
+		}
+	}
+}
+
+func laneKey(s string) string {
+	return strings.Map(func(c rune) rune {
+		if c >= 'A' && c <= 'Z' {
+			return c + 32
+		}
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			return c
+		}
+		return -1
+	}, s)
+}
+
+func lowerCamel(id string) string {
+	parts := strings.FieldsFunc(id, func(c rune) bool { return c == '-' || c == '_' })
+	for i := 1; i < len(parts); i++ {
+		parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+	}
+	return strings.Join(parts, "")
 }
 
 // changedSince lists what differs from the merge base: commits, the working tree and new files not yet added.
@@ -247,7 +320,9 @@ var (
 	compatRE     = regexp.MustCompile(`^\s*import\s+Qt5Compat\.GraphicalEffects`)
 	alphaRE      = regexp.MustCompile(`\b(applyAlpha)\([^;]*,\s*(?:[^,;?]*\?\s*)?[0-9]*\.[0-9]+`)
 	literalOKRE  = regexp.MustCompile(`//\s*([\w-]+-)?literal:\s*\S`)
-	irisStyleRE  = regexp.MustCompile(`import\s+qs\.modules\.iris\.style\b`)
+	// Config.setNestedValue(...), Config.options.x = ..., Persistent.states.x = ...: a write to the person's settings.
+	configWriteRE = regexp.MustCompile(`\bConfig\.(setNestedValues?)\s*\(|\b(Config\.options|Persistent\.states)(\.\w+|\[[^\]]+\])+\s*=[^=]`)
+	irisStyleRE   = regexp.MustCompile(`import\s+qs\.modules\.iris\.style\b`)
 )
 
 // tokenHomes are where a family defines its tokens: literals are the point there.

@@ -30,9 +30,10 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   refresh | changed KIND                ask the running shell to read the hub again
 
 In a hub repo:
-  check [--base REF]                    what CI runs on a pull request: one item changed, valid, version raised,
+  check [--base REF] [--maintainer]     what CI runs on a pull request: one item changed, valid, version raised,
                                         IPC documented, every language whole, the added lines on the family's
-                                        tokens (default origin/main). Run it until it prints nothing to fix
+                                        tokens, families left to their maintainers, other items in their own lane
+                                        (default origin/main). Run it until it prints nothing to fix
   validate [--fix] [ITEM_DIR...]        check every item, or the given ones (--fix writes missing qmldir files)
   audit [ITEM_DIR...] [--markdown]      what each item may do, runs, reaches and touches, and its quality score
   bumps [--base REF]                    changed items must raise their version (default origin/main; check does it too)
@@ -394,7 +395,7 @@ func runHubRepo(verb string, args []string, asJSON bool) int {
 		}
 		return 0
 	case "check":
-		entries := repo.Check(flag("--base", "origin/main"))
+		entries := repo.Check(flag("--base", "origin/main"), slices.Contains(args, "--maintainer"))
 		repo.Report()
 		if len(repo.Errors) > 0 {
 			fmt.Fprintf(os.Stderr, "%d to fix\n", len(repo.Errors))

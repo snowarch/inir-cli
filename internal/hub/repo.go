@@ -544,9 +544,13 @@ func (r *Repo) check(folder string) *entry {
 		if text(native, "id") != id {
 			r.errorf(nativeFile, `"id" must be "%s" (the folder name)`, id)
 		}
+		// A plugin lands at modules/<its id> and nowhere else: not inside a family, not in the base's own folders.
 		provides := text(hub, "provides")
-		if !validProvides(provides) {
-			r.errorf(hubFile, `"provides" is where it lives in the shell, e.g. "modules/%s"`, id)
+		if provides != "modules/"+id || !validProvides(provides) {
+			r.errorf(hubFile, `"provides" must be "modules/%s": a plugin lives in its own folder of the shell`, id)
+		}
+		if slices.Contains(baseModules, id) {
+			r.errorf(folder, `"%s" is one of the base's own folders (modules/%s): name the plugin something else`, id, id)
 		}
 		requires, ok := list(hub, "requires")
 		var needs []string
