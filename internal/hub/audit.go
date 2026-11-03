@@ -187,7 +187,7 @@ func (r *Repo) audit(e *entry, folder, hubFile string, hub map[string]any, decla
 		}
 		r.scanNever(p, b)
 		for perm, re := range detect {
-			if re.Match(b) {
+			if re.Match(b) && !(perm == "files" && ownOptionsOnly(b, e.id)) {
 				found[perm] = true
 			}
 		}
@@ -524,4 +524,14 @@ func (c *Card) Markdown() string {
 	}
 	b.WriteString("\n\n")
 	return b.String()
+}
+
+var fileViewRE, folderModelRE = regexp.MustCompile(`\bFileView\s*\{`), regexp.MustCompile(`\bFolderListModel\s*\{`)
+
+// ownOptionsOnly: every FileView in the file reads the item's own options file (Directories.pluginFile("<id>")), the
+// lane the base gives each plugin; that is no file outside its folder to declare.
+func ownOptionsOnly(b []byte, id string) bool {
+	own := regexp.MustCompile(`\bpath\s*:\s*Directories\.pluginFile\(\s*"` + regexp.QuoteMeta(id) + `"\s*\)`)
+	views := len(fileViewRE.FindAll(b, -1))
+	return views > 0 && views == len(own.FindAll(b, -1)) && !folderModelRE.Match(b)
 }
