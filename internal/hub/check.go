@@ -124,7 +124,7 @@ func (r *Repo) ownLane(folder, id string) {
 			}
 			where := fmt.Sprintf("%s:%d", p, i+1)
 			if configWriteRE.MatchString(code) {
-				r.errorf(where, "writes the person's settings: only families do. Keep your options in your item (widget.json \"options\", or a file of your own) so removing it leaves their shell as it was")
+				r.errorf(where, "writes the person's settings: only families do. A widget's options are its widget.json \"options\"; anything else keeps them in its own file (a FileView on Directories.pluginFile(\"%s\")), so removing it leaves their settings as they were", id)
 			}
 			if m := targetRE.FindStringSubmatch(code); m != nil && !strings.HasPrefix(laneKey(m[1]), want) {
 				r.errorf(where, "IPC target %q: start it with your id (%q), so it never answers for the shell or another plugin", m[1], lowerCamel(id))
@@ -205,6 +205,48 @@ func (r *Repo) contracts(folder string) {
 		}
 	}
 	r.catalogsWhole(folder)
+	r.partsWhole(folder)
+}
+
+// partsWhole: every file plugin.json names in "parts" is in the folder (the base loads it by that name, and a missing
+// one is a surface that silently never appears), and "families" lists family ids.
+func (r *Repo) partsWhole(folder string) {
+	nativeFile := filepath.Join(folder, "plugin.json")
+	if !exists(nativeFile) {
+		return
+	}
+	native := r.loadJSON(nativeFile)
+	if native == nil {
+		return
+	}
+	if parts, isMap := native["parts"].(map[string]any); isMap {
+		for _, name := range sortedKeysAny(parts) {
+			file, _ := parts[name].(string)
+			if file == "" || strings.Contains(file, "..") || !exists(filepath.Join(folder, file)) {
+				r.errorf(nativeFile, `"parts" → "%s": %q is not a file in this folder`, name, file)
+			}
+		}
+	}
+	if fams, present := native["families"]; present {
+		list, isList := fams.([]any)
+		for _, f := range list {
+			if s, _ := f.(string); !pluginIDRE.MatchString(s) {
+				isList = false
+			}
+		}
+		if !isList {
+			r.errorf(nativeFile, `"families" lists the family ids it is worn with, e.g. ["iris"]; leave it out for every family`)
+		}
+	}
+}
+
+func sortedKeysAny(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // ipcDocumented: `///` right above every IpcHandler and above each function in it, as the base's IPC registry reads

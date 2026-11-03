@@ -259,3 +259,19 @@ Item {
 		}
 	}
 }
+
+func TestCheckParts(t *testing.T) {
+	r, write := checkRepo(t)
+	write(map[string]string{
+		"components/corner/hub.json":    `{"version": "1.0.0", "provides": "modules/corner"}`,
+		"components/corner/plugin.json": `{"id": "corner", "kind": "component", "parts": {"panel": "Panel.qml", "gone": "Gone.qml"}, "families": ["iris", "Not An Id"]}`,
+		"components/corner/Panel.qml":   "import QtQuick\nItem {}\n",
+	})
+	errs := checkAs(r, false)
+	if !has(errs, `"parts" → "gone": "Gone.qml" is not a file`) || !has(errs, `"families" lists the family ids`) {
+		t.Fatalf("a missing part or a bad families list passed: %v", errs)
+	}
+	if has(errs, `"panel"`) {
+		t.Fatalf("a present part failed: %v", errs)
+	}
+}
