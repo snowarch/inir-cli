@@ -101,8 +101,8 @@ func (r *Repo) itemRules(since, item string, maintainer bool) {
 		r.ownLane(filepath.Join(r.Root, item), filepath.Base(item))
 		r.size(added, item, maintainer)
 		r.copies(added, item)
-		if kindDir == "components" || kindDir == "widgets" {
-			r.reach(added)
+		if kindDir == "components" || kindDir == "widgets" || kindDir == "designs" {
+			r.reach(added, kindDir)
 		}
 	}
 	r.addedLines(added, item)

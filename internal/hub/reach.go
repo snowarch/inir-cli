@@ -103,7 +103,7 @@ func (r *Repo) size(added map[string][]int, item string, maintainer bool) {
 
 // reach: an item's added lines import only what a family offers items, and never start the shell's binary. An
 // import is reported once, at its first line, with how many other files carry it.
-func (r *Repo) reach(added map[string][]int) {
+func (r *Repo) reach(added map[string][]int, kindDir string) {
 	inside := map[string][]string{}
 	defer func() {
 		for _, module := range sortedKeysStrings(inside) {
@@ -133,8 +133,11 @@ func (r *Repo) reach(added map[string][]int) {
 			line := lines[n-1]
 			where := fmt.Sprintf("%s:%d", p, n)
 			if m := familyImportRE.FindStringSubmatch(line); m != nil {
-				first, _, _ := strings.Cut(strings.TrimPrefix(m[2], "."), ".")
-				if module := "qs.modules." + m[1] + m[2]; !slices.Contains(offered[m[1]], first) {
+				rest := strings.TrimPrefix(m[2], ".")
+				first, _, _ := strings.Cut(rest, ".")
+				// a Design's Island face also takes the Island face's kit
+				ownKit := kindDir == "designs" && slices.ContainsFunc(designOffered[m[1]], func(kit string) bool { return rest == kit || strings.HasPrefix(rest, kit+".") })
+				if module := "qs.modules." + m[1] + m[2]; !slices.Contains(offered[m[1]], first) && !ownKit {
 					inside[module] = append(inside[module], where)
 				}
 			}

@@ -329,3 +329,61 @@ func TestCheckReach(t *testing.T) {
 		}
 	}
 }
+
+// A Design is values over its family's components: design.json against the family's schema, three parts at most, no
+// shaders, fixed colours that read, and only what a family offers (plus the Island face's kit) imported.
+func TestCheckDesign(t *testing.T) {
+	schema := `{"type": "object", "additionalProperties": false, "required": ["tokens"], "properties": {"$schema": {"type": "string"},
+		"tokens": {"type": "object", "additionalProperties": false, "properties": {
+			"shape": {"type": "object", "additionalProperties": false, "properties": {"ladder": {"type": "object", "additionalProperties": false,
+				"properties": {"panel": {"$ref": "#/$defs/rung"}}}}},
+			"motion": {"type": "object", "additionalProperties": false, "properties": {"morph": {"type": "string", "enum": ["", "direct"]}}},
+			"colour": {"type": "object", "additionalProperties": false, "properties": {"roles": {"type": "object", "additionalProperties": {"type": "object"}}}}}}},
+		"$defs": {"rung": {"type": "integer", "minimum": 0, "maximum": 48}}}`
+	design := func(tokens, parts string, extra map[string]string) map[string]string {
+		files := map[string]string{
+			"designs/ink/plugin.json":       `{"id": "ink", "kind": "design", "name": "Ink", "version": "1.0.0", "families": ["iris"], "provides": "modules/ink", "parts": ` + parts + `}`,
+			"designs/ink/hub.json":          `{"version": "1.0.0", "summary": "A design for checking", "provides": "modules/ink", "license": "MIT", "authors": ["t"]}`,
+			"designs/ink/design.json":       `{"tokens": ` + tokens + `}`,
+			"designs/ink/parts/Preview.qml": "import QtQuick\nItem {}\n",
+		}
+		for k, v := range extra {
+			files[k] = v
+		}
+		return files
+	}
+	// the family's schema is on main: a Design's pull request changes only its own folder
+	onMain := func(r *Repo, write func(map[string]string)) {
+		write(map[string]string{"families/iris/designs/design.schema.json": schema})
+		for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", "schema"}, {"update-ref", "refs/remotes/origin/main", "HEAD"}} {
+			cmd := exec.Command("git", append([]string{"-C", r.Root}, args...)...)
+			cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+	}
+	r, write := checkRepo(t)
+	onMain(r, write)
+	write(design(`{"shape": {"ladder": {"panel": 60}}, "motion": {"morph": "elastic"}, "glow": 1}`, `{"preview": "parts/Preview.qml", "settingsPage": "parts/Preview.qml"}`,
+		map[string]string{"designs/ink/field/Ink.frag": "void main() {}\n", "designs/ink/parts/Face.qml": "import QtQuick\nimport qs.modules.iris.settings\nItem {}\n"}))
+	errs := checkAs(r, false)
+	for _, want := range []string{"design.json.tokens.shape.ladder.panel: above 48", `"elastic" is not one of`, `"glow" is not a value the family reads`,
+		`"parts" → "settingsPage"`, "ships no shaders", "imports qs.modules.iris.settings"} {
+		if !has(errs, want) {
+			t.Errorf("want %q in %v", want, errs)
+		}
+	}
+
+	r, write = checkRepo(t)
+	onMain(r, write)
+	write(design(`{"colour": {"roles": {"dark": {"text": "#555555", "surface": "#000000"}}}}`, `{"preview": "parts/Preview.qml"}`,
+		map[string]string{"designs/ink/island/Face.qml": "import QtQuick\nimport qs.modules.iris.style\nimport qs.modules.iris.bar.island\nItem {}\n"}))
+	errs = checkAs(r, false)
+	if !has(errs, "dark: text on surface reads") {
+		t.Errorf("unreadable text passed: %v", errs)
+	}
+	if has(errs, "imports qs.modules.iris.bar.island") || has(errs, "imports qs.modules.iris.style") {
+		t.Errorf("a Design's face may take the Island kit and the style: %v", errs)
+	}
+}

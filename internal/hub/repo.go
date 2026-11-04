@@ -565,6 +565,9 @@ func (r *Repo) check(folder string) *entry {
 			r.errorf(hubFile, `"requires" lists the ids of the plugins it needs`)
 		}
 		e.item["surfaces"], e.item["icon"], e.item["provides"] = []string{"shell"}, orDefault(text(native, "icon"), "extension"), provides
+		if kind.Name == "design" {
+			e.item["surfaces"], e.item["families"], e.item["icon"] = []string{"look"}, r.designRules(folder, native), orDefault(text(native, "icon"), "brush")
+		}
 		r.qmldirsWhole(folder, provides)
 		if len(needs) > 0 {
 			e.item["requires"] = needs
