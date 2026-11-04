@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -273,5 +274,58 @@ func TestCheckParts(t *testing.T) {
 	}
 	if has(errs, `"panel"`) {
 		t.Fatalf("a present part failed: %v", errs)
+	}
+}
+
+func TestCheckReach(t *testing.T) {
+	big := func(n int, line string) string {
+		var b []byte
+		for i := 0; i < n; i++ {
+			b = append(b, fmt.Sprintf(line, i)...)
+		}
+		return string(b)
+	}
+	family := "import QtQuick\nItem {\n" + big(40, "    property int step%d: %[1]d * 2 + width\n") + "}\n"
+	// A family's file copied into an item, a family's inside imported, the shell's binary started by name.
+	r, write := checkRepo(t)
+	write(map[string]string{"families/fam/Watch.qml": family})
+	r.git("add", "-A")
+	r.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "fam")
+	r.git("update-ref", "refs/remotes/origin/main", "HEAD")
+	write(map[string]string{
+		"components/corner/hub.json":  `{"version": "1.0.0"}`,
+		"components/corner/Watch.qml": family,
+		"components/corner/Panel.qml": "import QtQuick\nimport qs.modules.iris.style\nimport qs.modules.iris.state\nItem {\n    // qs -c inir in a comment is fine\n    function f() { Quickshell.execDetached([\"qs\", \"-c\", \"inir\", \"ipc\"]) }\n}\n",
+		"components/corner/Other.qml": "import qs.modules.iris.state\nItem {}\n",
+		"components/corner/Big.qml":   "import QtQuick\nItem {\n" + big(700, "    // line %d\n") + "}\n",
+	})
+	errs := checkAs(r, false)
+	for _, want := range []string{
+		"Watch.qml: 100% of it is families/fam/Watch.qml",
+		"Other.qml:1: imports qs.modules.iris.state (and 1 more files)",
+		"Panel.qml:6: starts the shell's binary by name",
+		"Big.qml: 703 lines in one file",
+	} {
+		if !has(errs, want) {
+			t.Errorf("missing %q in %v", want, errs)
+		}
+	}
+	for _, not := range []string{"imports qs.modules.iris.style", "Panel.qml:5:", "lines of code in one pull request"} {
+		if has(errs, not) {
+			t.Errorf("flagged %q: %v", not, errs)
+		}
+	}
+
+	// From outside, a pull request reads whole: past 2500 lines of code it is sent in steps. A maintainer's is not held.
+	for _, maintainer := range []bool{false, true} {
+		r, write = checkRepo(t)
+		files := map[string]string{"components/huge/hub.json": `{"version": "1.0.0"}`}
+		for i := 0; i < 6; i++ {
+			files[fmt.Sprintf("components/huge/Part%d.qml", i)] = "import QtQuick\nItem {\n" + big(450, fmt.Sprintf("    property int p%d_%%d: 1\n", i)) + "}\n"
+		}
+		write(files)
+		if got := has(checkAs(r, maintainer), "lines of code in one pull request"); got == maintainer {
+			t.Errorf("maintainer %v: size rule held %v", maintainer, got)
+		}
 	}
 }

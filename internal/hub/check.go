@@ -18,7 +18,10 @@ import (
 //   - it keeps the shell's contracts: every IpcHandler and each of its functions says what it does in a `///`
 //     comment (the IPC reference is built from them), and every language it ships holds every string;
 //   - the lines it adds draw with the family's tokens: no hex or numeric colours, no fixed font sizes, no
-//     Qt5Compat effects, and in a file that draws with IrisStyle no alpha of its own.
+//     Qt5Compat effects, and in a file that draws with IrisStyle no alpha of its own;
+//   - outside a family, it stays in its lane (reach.go): no file over 600 lines, no copy of another file of the hub,
+//     imports only what a family offers items, never starts the shell's binary, and from outside at most 2500 lines
+//     of code per pull request.
 //
 // Rules about lines look only at what the branch adds, so code already in the hub never fails someone else's pull
 // request. Every failure says what to do instead.
@@ -86,11 +89,23 @@ func (r *Repo) Check(base string, maintainer bool) []*entry {
 	entries := r.Validate([]string{folder})
 	r.bumped(base, item)
 	r.contracts(folder)
-	if kindDir != "families" {
-		r.ownLane(folder, id)
-	}
-	r.addedLines(since, item)
+	r.itemRules(since, item, maintainer)
 	return entries
+}
+
+// itemRules: what the item's own files and the lines the branch adds keep (Check and Submit alike).
+func (r *Repo) itemRules(since, item string, maintainer bool) {
+	kindDir := strings.Split(item, "/")[0]
+	added := r.addedByFile(since, item)
+	if kindDir != "families" {
+		r.ownLane(filepath.Join(r.Root, item), filepath.Base(item))
+		r.size(added, item, maintainer)
+		r.copies(added, item)
+		if kindDir == "components" || kindDir == "widgets" {
+			r.reach(added)
+		}
+	}
+	r.addedLines(added, item)
 }
 
 // newID: a new item's id is its own in the whole hub (a component and a widget both called "clock" would both be
@@ -372,41 +387,7 @@ var tokenHomes = []string{"style", "looks"}
 
 // addedLines checks the lines this branch adds to the item's QML: the person's theme, scale and light or dark scheme
 // reach only what reads the family's tokens.
-func (r *Repo) addedLines(since, item string) {
-	added := map[string][]int{}
-	file := ""
-	for _, line := range strings.Split(r.git("diff", "-U0", "--no-color", since, "--", item), "\n") {
-		switch {
-		case strings.HasPrefix(line, "+++ "):
-			file = strings.TrimPrefix(strings.TrimPrefix(line, "+++ "), "b/")
-		case strings.HasPrefix(line, "@@ "):
-			// @@ -a,b +c,d @@
-			f := strings.Fields(line)
-			if len(f) < 3 {
-				continue
-			}
-			spec := strings.TrimPrefix(f[2], "+")
-			start, count := spec, "1"
-			if i := strings.Index(spec, ","); i >= 0 {
-				start, count = spec[:i], spec[i+1:]
-			}
-			s, _ := strconv.Atoi(start)
-			n, _ := strconv.Atoi(count)
-			for k := 0; k < n; k++ {
-				added[file] = append(added[file], s+k)
-			}
-		}
-	}
-	for _, p := range strings.Split(r.git("ls-files", "--others", "--exclude-standard", "--", item), "\n") {
-		if p == "" {
-			continue
-		}
-		b, _ := os.ReadFile(filepath.Join(r.Root, p))
-		for k := range strings.Count(string(b), "\n") + 1 {
-			added[p] = append(added[p], k+1)
-		}
-	}
-
+func (r *Repo) addedLines(added map[string][]int, item string) {
 	for _, rel := range sortedKeysInt(added) {
 		if filepath.Ext(rel) != ".qml" && filepath.Ext(rel) != ".js" {
 			continue
