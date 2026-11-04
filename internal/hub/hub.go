@@ -639,6 +639,36 @@ func (e *Env) Annotate(items []Item) []Item {
 	return items
 }
 
+// ordered puts what an id requires before it when both are asked for in one call: an update installs every plugin a
+// person has at once, in the catalogue's order, and a Design listed before its family was refused (11-04).
+func ordered(ids []string, items []Item) []string {
+	asked := map[string]bool{}
+	for _, id := range ids {
+		asked[id] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	var visit func(id string)
+	visit = func(id string) {
+		if seen[id] {
+			return
+		}
+		seen[id] = true
+		if item, err := find(id, items); err == nil {
+			for _, need := range strs(item, "requires") {
+				if asked[need] {
+					visit(need)
+				}
+			}
+		}
+		out = append(out, id)
+	}
+	for _, id := range ids {
+		visit(id)
+	}
+	return out
+}
+
 func find(id string, items []Item) (Item, error) {
 	for _, item := range items {
 		if str(item, "id") == id {
@@ -977,7 +1007,7 @@ func (e *Env) Install(ids []string) ([]Result, error) {
 func (e *Env) install(ids []string, items []Item) ([]Result, error) {
 	records := e.records()
 	var results []Result
-	for _, id := range ids {
+	for _, id := range ordered(ids, items) {
 		item, err := find(id, items)
 		if err != nil {
 			return results, err

@@ -3,8 +3,31 @@ package hub
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestInstallTakesWhatEachNeedsFirst(t *testing.T) {
+	items := []Item{
+		{"id": "airisu", "kind": "design", "requires": []any{"iris"}},
+		{"id": "ii", "kind": "family"},
+		{"id": "iris", "kind": "family"},
+		{"id": "loop-a", "kind": "component", "requires": []any{"loop-b"}},
+		{"id": "loop-b", "kind": "component", "requires": []any{"loop-a"}},
+	}
+	cases := map[string][2][]string{
+		"a Design before its family":   {{"airisu", "ii", "iris"}, {"ii", "iris", "airisu"}},
+		"already in order":             {{"iris", "airisu"}, {"iris", "airisu"}},
+		"a need not asked for":         {{"airisu"}, {"airisu"}},
+		"a cycle keeps every id once":  {{"loop-a", "loop-b"}, {"loop-b", "loop-a"}},
+		"an unknown id stays in place": {{"nope", "airisu", "iris"}, {"nope", "iris", "airisu"}},
+	}
+	for name, c := range cases {
+		if got := ordered(c[0], items); !reflect.DeepEqual(got, c[1]) {
+			t.Errorf("%s: %v gave %v, want %v", name, c[0], got, c[1])
+		}
+	}
+}
 
 func TestPulledItemsAreRefused(t *testing.T) {
 	dir := t.TempDir()
