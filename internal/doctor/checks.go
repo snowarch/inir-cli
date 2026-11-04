@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/snowarch/inir-cli/internal/shell"
 )
 
 // Step is one numbered check of the bash doctor. Fixer marks the steps whose
@@ -171,6 +173,10 @@ func (c *checker) dependencies(s *step) {
 	var names, ids []string
 	missing := func(name, id string) { names = append(names, name); ids = append(ids, id) }
 	for _, d := range cmds {
+		// the shell's runtime is qs-rs as setup installs it, or Quickshell
+		if d.cmd == "qs" && c.shellQs() != "" {
+			continue
+		}
 		if lookPath(d.cmd) == "" {
 			missing(d.name, d.cmd)
 		}
@@ -1075,6 +1081,9 @@ func (c *checker) pendingAddons() []string {
 	return out
 }
 
+// shellQs is _doctor_qs: the qs the shell runs on, or the one the launcher starts when none runs.
+func (c *checker) shellQs() string { return shell.Runtime(c.e.DataHome, lookPath) }
+
 // ownRuntime is runtime/current when setup put qs-rs there (sdata/lib/prebuilt.sh): the
 // launcher starts it before any qs in PATH, and it carries its own Qt.
 func (c *checker) ownRuntime() string {
@@ -1164,9 +1173,9 @@ func (c *checker) quickshellLoads(s *step) {
 		s.pass("Quickshell (skipped - no display)")
 		return
 	}
-	qs := "qs"
-	if own := c.ownRuntime(); own != "" && isExec(filepath.Join(own, "bin", "qs")) {
-		qs = filepath.Join(own, "bin", "qs")
+	qs := c.shellQs()
+	if qs == "" {
+		qs = "qs"
 	}
 	out, _ := stdout(10*time.Second, qs, "-p", target, "list")
 	out = strings.TrimSpace(out)

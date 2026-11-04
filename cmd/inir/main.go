@@ -157,7 +157,7 @@ func runningShell() (string, bool) {
 // reach it with its own runtime; with no shell running, the one the launcher starts
 // (scripts/inir find_qs): INIR_QS_BIN, qs-rs where setup puts it, then the installed qs.
 func quickshell() (string, error) {
-	if exe, ok := runningShellExe(); ok {
+	if exe, ok := shell.RunningExe(); ok {
 		return exe, nil
 	}
 	data := os.Getenv("XDG_DATA_HOME")
@@ -170,42 +170,6 @@ func quickshell() (string, error) {
 		}
 	}
 	return exec.LookPath("qs")
-}
-
-// runningShellExe finds a live instance of the inir shell in Quickshell's runtime dir
-// (by-pid links whose instance is under by-shell/inir) and returns its executable.
-func runningShellExe() (string, bool) {
-	run := os.Getenv("XDG_RUNTIME_DIR")
-	if run == "" {
-		run = fmt.Sprintf("/run/user/%d", os.Getuid())
-	}
-	run = filepath.Join(run, "quickshell")
-	links, _ := filepath.Glob(filepath.Join(run, "by-pid", "*"))
-	for _, link := range links {
-		target, err := os.Readlink(link)
-		if err != nil {
-			continue
-		}
-		if _, err := os.Stat(filepath.Join(run, "by-shell", "inir", filepath.Base(target))); err != nil {
-			continue
-		}
-		pid := filepath.Base(link)
-		comm, err := os.ReadFile(filepath.Join("/proc", pid, "comm"))
-		// inir's launcher runs it through an inir-shell link (ananicy's `qs` rule nices it).
-		if name := strings.TrimSpace(string(comm)); err != nil || (name != "qs" && name != "inir-shell") {
-			continue
-		}
-		exe, err := os.Readlink(filepath.Join("/proc", pid, "exe"))
-		if err != nil {
-			continue
-		}
-		// A binary replaced on disk while running: the new one at that path.
-		exe = strings.TrimSuffix(exe, " (deleted)")
-		if st, err := os.Stat(exe); err == nil && st.Mode()&0o111 != 0 {
-			return exe, true
-		}
-	}
-	return "", false
 }
 
 // shellCall makes one IPC call on the running shell; false when none runs or
