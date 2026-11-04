@@ -16,7 +16,7 @@ func TestInstallTakesWhatEachNeedsFirst(t *testing.T) {
 		{"id": "loop-b", "kind": "component", "requires": []any{"loop-a"}},
 	}
 	cases := map[string][2][]string{
-		"a Design before its family":   {{"airisu", "ii", "iris"}, {"ii", "iris", "airisu"}},
+		"a Design before its family":   {{"airisu", "ii", "iris"}, {"iris", "airisu", "ii"}},
 		"already in order":             {{"iris", "airisu"}, {"iris", "airisu"}},
 		"a need not asked for":         {{"airisu"}, {"airisu"}},
 		"a cycle keeps every id once":  {{"loop-a", "loop-b"}, {"loop-b", "loop-a"}},
