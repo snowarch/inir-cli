@@ -192,6 +192,8 @@ func Review(s System, pk Packages, c Choices) string {
 	line := func(format string, a ...any) { fmt.Fprintf(&b, "• "+format+"\n", a...) }
 	if n, known := pk.Missing(c.Groups); known && n == 0 {
 		line("Every package is already installed")
+	} else if known && n == 1 {
+		line("Installs 1 package")
 	} else if known {
 		line("Installs about %d packages", n)
 	} else {
