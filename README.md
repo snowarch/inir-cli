@@ -23,6 +23,10 @@ It is the front door: what it knows it does itself, and every other command goes
   AUR packages and providers a full install would use; `inir deps install` runs that plan.
 - **Install and update wizards**: at a terminal and without `-y`, `inir install` and
   `inir update` put a wizard in front of `setup`, which still does the work.
+- **Compositors**: iNiR runs on Niri and on Umbriel. `inir install` asks where it should run;
+  `inir compositor status` says what runs and what is installed, `add umbriel` sets iNiR up
+  there (your Niri keybinds and keyboard layout come along, `sync` brings them again) and
+  `remove umbriel` leaves Umbriel as it is. The doctor wires every compositor you have.
 
 
 ## Long commands and your look
