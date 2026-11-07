@@ -197,3 +197,24 @@ func TestRenderNotes(t *testing.T) {
 		}
 	}
 }
+
+func TestCompositorPickReachesSetup(t *testing.T) {
+	for pick, want := range map[string]string{"both": "--compositor=both", "niri": "--compositor=niri"} {
+		args, _ := Choices{Compositor: pick}.Flags(nil)
+		if !slices.Contains(args, want) {
+			t.Errorf("pick %q: args %v lack %s", pick, args, want)
+		}
+	}
+	if args, _ := (Choices{}).Flags(nil); slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--compositor") }) {
+		t.Errorf("no pick sends no --compositor: %v", args)
+	}
+	for _, tc := range []struct {
+		umbriel bool
+		pick    string
+		want    string
+	}{{false, "both", "Installs Umbriel"}, {true, "both", "on Umbriel too"}, {true, "niri", "Leaves Umbriel as it is"}} {
+		if r := Review(System{Umbriel: tc.umbriel}, Packages{}, Choices{Compositor: tc.pick}); !strings.Contains(r, tc.want) {
+			t.Errorf("umbriel=%v pick=%s: review lacks %q:\n%s", tc.umbriel, tc.pick, tc.want, r)
+		}
+	}
+}

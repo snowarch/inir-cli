@@ -174,6 +174,11 @@ var Commands = []Command{
 		{Name: "restart", Desc: "Restart it"},
 		{Name: "status", Desc: "Whether it runs"},
 		{Name: "logs", Desc: "Its journal", Flags: []Flag{{Name: "--full", Desc: "All categories"}}}}},
+	{Name: "compositor", Desc: "Niri, Umbriel: where iNiR runs here", Subs: []Sub{
+		{Name: "status", Desc: "What runs, what is installed, your pick"},
+		{Name: "add", Desc: "Set iNiR up on niri or umbriel"},
+		{Name: "remove", Desc: "Leave Umbriel as it is (remove umbriel)"},
+		{Name: "sync", Desc: "Your Niri keys and keyboard to Umbriel again"}}},
 	{Name: "ipc", Desc: "Call an IPC function", Flags: withConfig()},
 	{Name: "terminal", Desc: "Open the terminal", Flags: withConfig()},
 	{Name: "browser", Desc: "Open the browser", Flags: withConfig()},

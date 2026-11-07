@@ -244,3 +244,16 @@ func TestConfiguredFontsFromFamilies(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestCompositorChoiceReadsThePick(t *testing.T) {
+	dir := t.TempDir()
+	if got := CompositorChoice(dir); got != "" {
+		t.Fatalf("no file: %q", got)
+	}
+	for in, want := range map[string]string{"niri\n": "niri", "both": "both", "kde\n": ""} {
+		os.WriteFile(filepath.Join(dir, "compositor"), []byte(in), 0o644)
+		if got := CompositorChoice(dir); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+}

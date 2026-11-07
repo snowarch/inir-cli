@@ -18,6 +18,11 @@ type Choices struct {
 	Groups []string // optional dependency groups to install
 	Extras []string // walls, yamis, sddm, fish
 	Backup bool     // copy the configs iNiR replaces to BackupDir first
+	// Compositor is setup's --compositor: "both" sets iNiR up on Umbriel too
+	// (installing it if needed), "niri" leaves Umbriel as it is, "" asks
+	// nothing (Umbriel gets iNiR when installed or first logged into).
+	Compositor    string
+	askCompositor bool
 }
 
 const (
@@ -67,6 +72,11 @@ func Ask(t ui.Theme, s System, pk Packages, backupDir string, accessible bool, a
 	}
 	if slices.Contains(args, "--set-default-shell") {
 		c.Extras = append(c.Extras, extraFish)
+	}
+	// An explicit --compositor goes to setup as it is; otherwise the form asks.
+	c.askCompositor = !slices.ContainsFunc(args, func(a string) bool { return a == "--compositor" || strings.HasPrefix(a, "--compositor=") })
+	if c.askCompositor && s.Umbriel {
+		c.Compositor = "both"
 	}
 	run := func(groups ...*huh.Group) error {
 		err := huh.NewForm(groups...).
@@ -148,6 +158,21 @@ func picks(t ui.Theme, s System, pk Packages, backupDir string, c *Choices) []*h
 				Value(&c.Extras),
 		),
 	}
+	if c.askCompositor {
+		where := huh.NewSelect[string]().Title("Where iNiR runs").Value(&c.Compositor)
+		if s.Umbriel {
+			where = where.Description("Umbriel is installed here too. Pick it at the login screen like Niri.").
+				Options(
+					huh.NewOption("Niri and Umbriel  "+faint(t, "Umbriel gets iNiR's keys, your Niri shortcuts and the shell"), "both"),
+					huh.NewOption("Niri only  "+faint(t, "Umbriel stays exactly as it is"), "niri"))
+		} else {
+			where = where.Description("Both are Wayland compositors; you pick one at the login screen.").
+				Options(
+					huh.NewOption("Niri  "+faint(t, "add Umbriel any time: iNiR sets itself up there on your first login"), ""),
+					huh.NewOption("Niri and Umbriel  "+faint(t, "installs Umbriel now, with iNiR's setup and your Niri shortcuts"), "both"))
+		}
+		groups = append(groups, huh.NewGroup(where))
+	}
 	if s.Configs {
 		groups = append(groups, huh.NewGroup(
 			huh.NewConfirm().
@@ -180,6 +205,14 @@ func Review(s System, pk Packages, c Choices) string {
 	}
 	if len(s.Replace) > 0 {
 		line("Swaps %s for the stable Quickshell", strings.Join(s.Replace, ", "))
+	}
+	switch {
+	case c.Compositor == "both" && !s.Umbriel:
+		line("Installs Umbriel and sets iNiR up on it")
+	case c.Compositor == "both":
+		line("Sets iNiR up on Umbriel too")
+	case c.Compositor == "niri" && s.Umbriel:
+		line("Leaves Umbriel as it is")
 	}
 	if s.Configs && c.Backup {
 		line("Backs up your configs, then writes iNiR's")
@@ -215,6 +248,9 @@ func (c Choices) Flags(optional []Group) (args, env []string) {
 		if !slices.Contains(c.Groups, g.Key) {
 			args = append(args, "--no-"+g.Key)
 		}
+	}
+	if c.Compositor != "" {
+		args = append(args, "--compositor="+c.Compositor)
 	}
 	yn := func(b bool) string {
 		if b {

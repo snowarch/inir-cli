@@ -31,7 +31,7 @@ func (c *checker) service(s *step) {
 	strategy := c.e.Version().UpdateStrategy()
 	userDir := filepath.Join(c.e.ConfigHome, "systemd", "user")
 	servicePath := filepath.Join(userDir, "inir.service")
-	expected := compositorUnits()
+	expected := compositorUnits(c.e.ConfDir)
 	if c.serviceMasked() {
 		s.fail("User inir.service is masked")
 		s.hint("Run: inir service install && inir service enable")
@@ -248,15 +248,34 @@ func (c *checker) serviceSyncChanges(asset, target string) bool {
 
 // compositorUnits is both compositors iNiR runs on as soon as either is
 // installed (setup's ensure_user_inir_service_enabled wires the shell under
-// each, so one installed after iNiR starts it too); nil when neither is.
-func compositorUnits() []string {
-	both := []string{"niri.service", "umbriel.service"}
-	for _, unit := range both {
+// each, so one installed after iNiR starts it too), only Niri's when the
+// person picked Niri alone; nil when neither is. Mirrors compositor_units in
+// scripts/lib/compositor.sh.
+func compositorUnits(confDir string) []string {
+	units := []string{"niri.service", "umbriel.service"}
+	if CompositorChoice(confDir) == "niri" {
+		units = units[:1]
+	}
+	for _, unit := range []string{"niri.service", "umbriel.service"} {
 		if _, code := run(5*time.Second, "systemctl", "--user", "cat", unit); code == 0 {
-			return both
+			return units
 		}
 	}
 	return nil
+}
+
+// CompositorChoice is the person's pick in iNiR's config dir, the file
+// "compositor" (niri, umbriel or both), "" when nobody asked.
+func CompositorChoice(confDir string) string {
+	data, err := os.ReadFile(filepath.Join(confDir, "compositor"))
+	if err != nil {
+		return ""
+	}
+	switch v := strings.TrimSpace(strings.SplitN(string(data), "\n", 2)[0]); v {
+	case "niri", "umbriel", "both":
+		return v
+	}
+	return ""
 }
 
 // wiringChanges is whether ensure_user_inir_service_enabled would move or
@@ -265,7 +284,7 @@ func (c *checker) wiringChanges(servicePath string, written bool) bool {
 	if !c.systemd() || (!isFile(servicePath) && !written) {
 		return false
 	}
-	units := compositorUnits()
+	units := compositorUnits(c.e.ConfDir)
 	if len(units) == 0 {
 		return false
 	}

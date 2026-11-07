@@ -21,6 +21,7 @@ type System struct {
 	Configs  bool   // there are configs an install would overwrite (niri, fish, foot...)
 	SDDM     bool   // the login screen can take the pixel theme
 	Sudo     bool   // sudo works without asking right now
+	Umbriel  bool   // Umbriel, the other compositor iNiR runs on, is installed
 	// Remove are other shells that cannot live next to iNiR (setup removes
 	// them); Replace are Quickshell builds setup swaps for the stable one.
 	Remove, Replace []string
@@ -50,6 +51,8 @@ func Detect(confDir string) System {
 	_, err = exec.LookPath("sddm")
 	s.SDDM = err == nil
 	s.Sudo = exec.Command("sudo", "-n", "true").Run() == nil
+	_, err = exec.LookPath("umbriel")
+	s.Umbriel = err == nil
 	if s.OS == "arch" {
 		s.Remove = pacmanInstalled(otherShells...)
 		s.Replace = pacmanInstalled("quickshell-git", "quickshell-bin")
