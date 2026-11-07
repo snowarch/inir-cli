@@ -401,6 +401,7 @@ func (r *Repo) check(folder string) *entry {
 	if minInir != "" && !semverRE.MatchString(minInir) {
 		r.errorf(hubFile, `"minInir" must be x.y.z`)
 	}
+	changes := r.changes(hubFile, hub, version)
 	declaredList, ok := list(hub, "permissions")
 	declared := map[string]bool{}
 	for _, p := range declaredList {
@@ -641,10 +642,72 @@ func (r *Repo) check(folder string) *entry {
 	}
 	for k, v := range map[string]any{"id": id, "kind": kind.Name, "name": name, "summary": summary,
 		"description": description, "version": version, "authors": authors, "license": license, "tags": tags,
-		"permissions": orEmpty(perms), "minInir": minInir} {
+		"permissions": orEmpty(perms), "minInir": minInir, "changes": changes} {
 		e.item[k] = v
 	}
 	return e
+}
+
+// Change is one version's notes, as the shell, the update notice and inir.space show them.
+type Change struct {
+	Version string   `json:"version"`
+	Notes   []string `json:"notes"`
+}
+
+// changes reads hub.json's "changes" ({"1.2.0": ["what a person notices"], ...}) newest first; versions above the
+// item's own are refused, and the catalogue keeps the last changesKept.
+func (r *Repo) changes(hubFile string, hub map[string]any, version string) []Change {
+	raw, present := hub["changes"]
+	if !present {
+		return []Change{}
+	}
+	notes, ok := raw.(map[string]any)
+	if !ok {
+		r.errorf(hubFile, `"changes" maps each version to its notes: {"1.1.0": ["Clock face follows the wallpaper"]}`)
+		return []Change{}
+	}
+	var out []Change
+	for v, lines := range notes {
+		list, isList := lines.([]any)
+		valid := semverRE.MatchString(v) && isList && len(list) > 0 && len(list) <= 6
+		var strs []string
+		for _, l := range list {
+			s, isStr := l.(string)
+			s = strings.TrimSpace(s)
+			if !isStr || s == "" || utf8.RuneCountInString(s) > 140 {
+				valid = false
+			}
+			strs = append(strs, s)
+		}
+		if !valid {
+			r.errorf(hubFile, `"changes" › "%s": an x.y.z version with 1-6 lines of up to 140 characters`, v)
+			continue
+		}
+		if semverRE.MatchString(version) && newer(v, version) {
+			r.errorf(hubFile, `"changes" › "%s" is above "version" (%s)`, v, version)
+			continue
+		}
+		out = append(out, Change{v, strs})
+	}
+	slices.SortFunc(out, func(a, b Change) int {
+		if newer(a.Version, b.Version) {
+			return -1
+		}
+		return 1
+	})
+	if len(out) > changesKept {
+		out = out[:changesKept]
+	}
+	return orNoChanges(out)
+}
+
+const changesKept = 8
+
+func orNoChanges(c []Change) []Change {
+	if c == nil {
+		return []Change{}
+	}
+	return c
 }
 
 func orDefault(s, fallback string) string {
@@ -846,6 +909,10 @@ func (r *Repo) Bumps(base string) {
 		if parts[0] == "dist" {
 			r.errorf(p, "dist/ is built by CI; leave it out of the pull request")
 		}
+		// The card's picture is not installed: a new preview alone updates nobody.
+		if len(parts) == 3 && strings.HasPrefix(parts[2], "preview.") {
+			continue
+		}
 		for _, k := range Kinds {
 			if len(parts) >= 2 && parts[0] == k.Dir {
 				touched[parts[0]+"/"+parts[1]] = true
@@ -866,12 +933,20 @@ func (r *Repo) Bumps(base string) {
 		if old == "" {
 			continue // new item
 		}
-		var was, now struct{ Version string }
+		var was, now struct {
+			Version string
+			Changes map[string]any
+		}
 		json.Unmarshal([]byte(old), &was)
 		b, _ := os.ReadFile(filepath.Join(folder, "hub.json"))
 		json.Unmarshal(b, &now)
-		if semverRE.MatchString(was.Version) && semverRE.MatchString(now.Version) && !newer(now.Version, was.Version) {
+		if !semverRE.MatchString(was.Version) || !semverRE.MatchString(now.Version) {
+			continue
+		}
+		if !newer(now.Version, was.Version) {
 			r.errorf(filepath.Join(folder, "hub.json"), `files changed: raise "version" so installed copies update`)
+		} else if _, said := now.Changes[now.Version]; !said {
+			r.errorf(filepath.Join(folder, "hub.json"), `"changes" › "%s": say what people will notice in this version`, now.Version)
 		}
 	}
 }

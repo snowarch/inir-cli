@@ -261,6 +261,18 @@ func versionKey(text string) []int {
 }
 
 // newer reports whether version a is above b.
+// changesAfter is what an update brings: the catalogue's notes for every version above the one installed.
+func changesAfter(item Item, installed string) []any {
+	out := []any{}
+	list, _ := item["changes"].([]any)
+	for _, c := range list {
+		if m, ok := c.(map[string]any); ok && newer(str(m, "version"), installed) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 func newer(a, b string) bool { return slices.Compare(versionKey(a), versionKey(b)) > 0 }
 
 func toURL(source string) string {
@@ -612,6 +624,10 @@ func (e *Env) Annotate(items []Item) []Item {
 			item["installedBlocked"] = e.pulledFor(r.Source, id, r.Version)
 		}
 		item["update"] = ok && newer(str(item, "version"), r.Version)
+		item["news"] = []any{}
+		if item["update"] == true {
+			item["news"] = changesAfter(item, r.Version)
+		}
 		item["compatible"] = str(item, "minInir") == "" || !newer(str(item, "minInir"), current)
 		k, _ := KindOf(kind)
 		item["conflict"] = !ok && (e.present(kind, id) || (k.Plugin && e.linkTaken(id, str(item, "provides"))))
@@ -631,7 +647,7 @@ func (e *Env) Annotate(items []Item) []Item {
 			name = id
 		}
 		items = append(items, Item{"id": id, "kind": r.Kind, "name": name, "summary": "", "description": "",
-			"version": r.Version, "installed": r.Version, "update": false, "compatible": true, "conflict": false,
+			"version": r.Version, "installed": r.Version, "update": false, "news": []any{}, "compatible": true, "conflict": false,
 			"orphan": true, "blocked": "", "installedBlocked": e.pulledFor(r.Source, id, r.Version),
 			"authors": []any{}, "tags": []any{}, "permissions": []any{}, "families": []any{},
 			"surfaces": []any{}, "previewUrl": "", "source": r.Source})
