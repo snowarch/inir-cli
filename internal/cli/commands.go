@@ -130,8 +130,8 @@ var Commands = []Command{
 		{Name: "install", Desc: "Install items"},
 		{Name: "update", Desc: "Update items, or all"},
 		{Name: "remove", Desc: "Remove items"},
-		{Name: "social", Desc: "Publish your votes, reactions and installs", Flags: []Flag{
-			{Name: "--counts", Desc: "What everyone else did with each item, from the relays now"},
+		{Name: "social", Desc: "Publish your votes, reactions and installs"},
+		{Name: "counts", Desc: "What everyone else did with each item, from the relays now", Flags: []Flag{
 			{Name: "--max-age", Desc: "Reuse the last read if younger than this", Value: "SECONDS"}}},
 		{Name: "sync", Desc: "Fetch the catalogue"},
 		{Name: "status", Desc: "Catalogue age and source", Flags: []Flag{

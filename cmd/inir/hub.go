@@ -27,7 +27,7 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   fetch ID... [--for VERSION]           download into the cache only, checked against that iNiR version
   link DIR...                           link a plugin folder of your own into the shell, to work on it
   social                                publish your votes, reactions and installs (hub.social in config.json)
-  social --counts [--max-age SECONDS]   what everyone else did with each item, read from the relays now
+  counts [--max-age SECONDS]            what everyone else did with each item, read from the relays now
                                         (the last read when younger than SECONDS, default 300)
   open [ID]                             the Hub page in your family's Settings, at one item if given
   refresh | changed KIND                ask the running shell to read the hub again
@@ -68,43 +68,45 @@ func runHub(args []string) (int, bool) {
 		return 0, true
 	case "check", "validate", "audit", "bumps", "new", "build", "preview", "stats", "submit":
 		return runHubRepo(verb, rest, asJSON), true
+	case "counts":
+		// Its own verb, not a flag of social: an older inir reads "social --counts" as "social" and publishes.
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		maxAge := 300 * time.Second
+		if i := slices.Index(rest, "--max-age"); i >= 0 && i+1 < len(rest) {
+			if n, err := strconv.Atoi(rest[i+1]); err == nil && n >= 0 {
+				maxAge = time.Duration(n) * time.Second
+			}
+		}
+		counts, err := hub.Default().Counts(ctx, maxAge)
+		if err != nil {
+			if asJSON {
+				printJSON(map[string]any{"ok": false, "error": err.Error(), "code": hub.Code(err)})
+			}
+			fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
+			return hub.Code(err), true
+		}
+		if asJSON {
+			printJSON(counts)
+		} else {
+			ids := make([]string, 0, len(counts.Items))
+			for id := range counts.Items {
+				ids = append(ids, id)
+			}
+			slices.Sort(ids)
+			for _, id := range ids {
+				s := counts.Items[id]
+				line := fmt.Sprintf("%-24s up %d  down %d  installs %d", id, s.Up, s.Down, s.Installs)
+				for emoji, n := range s.Reactions {
+					line += fmt.Sprintf("  %s %d", emoji, n)
+				}
+				fmt.Println(line)
+			}
+		}
+		return 0, true
 	case "social":
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		if slices.Contains(rest, "--counts") {
-			maxAge := 300 * time.Second
-			if i := slices.Index(rest, "--max-age"); i >= 0 && i+1 < len(rest) {
-				if n, err := strconv.Atoi(rest[i+1]); err == nil && n >= 0 {
-					maxAge = time.Duration(n) * time.Second
-				}
-			}
-			counts, err := hub.Default().Counts(ctx, maxAge)
-			if err != nil {
-				if asJSON {
-					printJSON(map[string]any{"ok": false, "error": err.Error(), "code": hub.Code(err)})
-				}
-				fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
-				return hub.Code(err), true
-			}
-			if asJSON {
-				printJSON(counts)
-			} else {
-				ids := make([]string, 0, len(counts.Items))
-				for id := range counts.Items {
-					ids = append(ids, id)
-				}
-				slices.Sort(ids)
-				for _, id := range ids {
-					s := counts.Items[id]
-					line := fmt.Sprintf("%-24s up %d  down %d  installs %d", id, s.Up, s.Down, s.Installs)
-					for emoji, n := range s.Reactions {
-						line += fmt.Sprintf("  %s %d", emoji, n)
-					}
-					fmt.Println(line)
-				}
-			}
-			return 0, true
-		}
 		line, err := hub.Default().Social(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
