@@ -666,7 +666,11 @@ func (c *checker) launcher(s *step) {
 // (sdata/lib/functions.sh) would write the icon or a .desktop file.
 func (c *checker) desktopIntegrationStale() bool {
 	launcher := filepath.Join(c.e.BinHome, "inir")
-	icon := filepath.Join(c.e.RepoRoot, "assets", "icons", "desktop-symbolic.svg")
+	// The app icon: assets/icons/inir.svg (a base before 2.34 shipped a symbolic one under another name).
+	icon := filepath.Join(c.e.RepoRoot, "assets", "icons", "inir.svg")
+	if !isFile(icon) {
+		icon = filepath.Join(c.e.RepoRoot, "assets", "icons", "desktop-symbolic.svg")
+	}
 	if isFile(icon) {
 		target := filepath.Join(c.e.DataHome, "icons", "hicolor", "scalable", "apps", "inir.svg")
 		if !isFile(target) || !sameContent(icon, target) {
