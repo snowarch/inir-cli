@@ -172,16 +172,34 @@ func Summary(t ui.Theme, m *Progress, logPath string) int {
 		for _, r := range m.Reboot {
 			b.WriteString(bullet(r))
 		}
-		b.WriteString(muted.Render("Then pick Niri at the login screen.") + "\n")
+		b.WriteString(muted.Render("Then pick "+loginSessions()+" at the login screen.") + "\n")
 	default:
 		b.WriteString(bold.Render("iNiR is installed.") + " " + muted.Render("Took "+Duration(m.Elapsed)+".") + "\n")
-		if os.Getenv("NIRI_SOCKET") != "" {
+		if os.Getenv("NIRI_SOCKET") != "" || os.Getenv("UMBRIEL_SOCKET") != "" {
 			b.WriteString(muted.Render("The shell is already running on the new files.") + "\n")
 		} else {
-			b.WriteString(muted.Render("Log out and pick Niri at the login screen.") + "\n")
+			b.WriteString(muted.Render("Log out and pick "+loginSessions()+" at the login screen.") + "\n")
 		}
 	}
 	return s.print(m, logPath)
+}
+
+// loginSessions names the sessions iNiR runs in that this machine has, as the
+// login screen lists them.
+func loginSessions() string {
+	var names []string
+	for _, c := range []struct{ name, file string }{{"Niri", "niri.desktop"}, {"Umbriel", "umbriel.desktop"}} {
+		if _, err := os.Stat("/usr/share/wayland-sessions/" + c.file); err == nil {
+			names = append(names, c.name)
+		}
+	}
+	switch len(names) {
+	case 0:
+		return "Niri"
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
 }
 
 // print closes the card with the warnings and where to look, framed in the

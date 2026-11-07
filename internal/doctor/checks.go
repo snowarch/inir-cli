@@ -41,7 +41,7 @@ var Steps = []Step{
 	{9, "version-tracking", "Checking version tracking", true, (*checker).versionTracking},
 	{10, "manifest", "Checking file manifest", true, (*checker).manifest},
 	{11, "service", "Checking user service", true, (*checker).service},
-	{12, "niri", "Checking Niri compositor", true, (*checker).niriRunning},
+	{12, "niri", "Checking the compositor", true, (*checker).niriRunning},
 	{13, "helpers", "Checking helpers", true, (*checker).helpers},
 	{14, "stale-quickshell", "Checking stale local quickshell", false, (*checker).staleQuickshell},
 	{15, "qt-abi", "Checking Quickshell/Qt ABI", true, (*checker).qtABI},
@@ -809,6 +809,17 @@ func (c *checker) manifest(s *step) {
 // --- 12 -----------------------------------------------------------------------
 
 func (c *checker) niriRunning(s *step) {
+	// Umbriel is the other compositor iNiR runs on.
+	if sock := c.e.Getenv("UMBRIEL_SOCKET"); sock != "" && isSocket(sock) {
+		s.pass("Umbriel compositor running")
+		return
+	}
+	if c.systemd() {
+		if _, code := run(5*time.Second, "systemctl", "--user", "is-active", "--quiet", "umbriel.service"); code == 0 {
+			s.pass("Umbriel compositor running")
+			return
+		}
+	}
 	if c.systemd() {
 		if _, code := run(5*time.Second, "systemctl", "--user", "is-active", "--quiet", "niri.service"); code == 0 {
 			sock, wayland, ok := c.niriServiceEnvironment()
@@ -828,7 +839,7 @@ func (c *checker) niriRunning(s *step) {
 	if sock := c.e.Getenv("NIRI_SOCKET"); sock != "" && isSocket(sock) {
 		s.pass("Niri compositor running")
 	} else {
-		s.fail("Niri not detected (run inside Niri session)")
+		s.fail("Neither Niri nor Umbriel detected (run inside a Niri or Umbriel session)")
 	}
 }
 

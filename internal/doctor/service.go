@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -30,10 +31,7 @@ func (c *checker) service(s *step) {
 	strategy := c.e.Version().UpdateStrategy()
 	userDir := filepath.Join(c.e.ConfigHome, "systemd", "user")
 	servicePath := filepath.Join(userDir, "inir.service")
-	expected := ""
-	if _, code := run(5*time.Second, "systemctl", "--user", "cat", "niri.service"); code == 0 {
-		expected = "niri.service"
-	}
+	expected := compositorUnits()
 	if c.serviceMasked() {
 		s.fail("User inir.service is masked")
 		s.hint("Run: inir service install && inir service enable")
@@ -79,7 +77,7 @@ func (c *checker) service(s *step) {
 	}
 
 	// Restoring the unit also wires it, silently, when there is a niri.service to wire to.
-	wiringDone := written && strategy != "package-manager" && expected != ""
+	wiringDone := written && strategy != "package-manager" && len(expected) > 0
 	if strategy != "package-manager" {
 		if c.legacyNiriStartup() {
 			s.fixable("Niri still starts the shell itself", "Removed legacy Niri shell startup")
@@ -94,7 +92,7 @@ func (c *checker) service(s *step) {
 		}
 	}
 	if !wiringDone && c.wiringChanges(servicePath, written) {
-		s.fixable("inir.service is not wired to niri.service", "Repaired inir.service Niri wiring")
+		s.fixable("inir.service is not wired to "+strings.Join(expected, " and "), "Repaired inir.service compositor wiring")
 		wiringDone = true
 	}
 
@@ -125,28 +123,30 @@ func (c *checker) service(s *step) {
 	}
 
 	if !wiringDone {
-		has, stale := false, []string(nil)
+		var stale, missing []string
 		dirs, _ := filepath.Glob(filepath.Join(userDir, "*.wants"))
 		for _, d := range dirs {
 			if !isDir(d) || !exists(filepath.Join(d, "inir.service")) {
 				continue
 			}
-			name := strings.TrimSuffix(filepath.Base(d), ".wants")
-			if expected != "" && name == expected {
-				has = true
-			} else {
+			if name := strings.TrimSuffix(filepath.Base(d), ".wants"); !slices.Contains(expected, name) {
 				stale = append(stale, name)
 			}
 		}
-		if expected != "" && !has {
-			s.fixable("inir.service not wired to "+expected, "Enabled inir.service for "+expected)
+		for _, unit := range expected {
+			if !exists(filepath.Join(userDir, unit+".wants", "inir.service")) {
+				missing = append(missing, unit)
+			}
+		}
+		if len(missing) > 0 {
+			s.fixable("inir.service not wired to "+strings.Join(missing, " "), "Enabled inir.service for "+strings.Join(missing, " "))
 		}
 		if len(stale) > 0 {
 			s.fail("Stale service links found: " + strings.Join(stale, " "))
 			s.hint("Run: inir service disable && inir service enable")
 		}
 	}
-	if expected == "" {
+	if len(expected) == 0 {
 		s.warn("No supported compositor service detected for enablement wiring")
 	}
 }
@@ -246,23 +246,40 @@ func (c *checker) serviceSyncChanges(asset, target string) bool {
 	return false
 }
 
+// compositorUnits is every installed compositor iNiR runs on (setup's
+// ensure_user_inir_service_enabled wires the shell under each).
+func compositorUnits() []string {
+	var units []string
+	for _, unit := range []string{"niri.service", "umbriel.service"} {
+		if _, code := run(5*time.Second, "systemctl", "--user", "cat", unit); code == 0 {
+			units = append(units, unit)
+		}
+	}
+	return units
+}
+
 // wiringChanges is whether ensure_user_inir_service_enabled would move or
-// make the niri.service.wants link.
+// make a <compositor>.service.wants link.
 func (c *checker) wiringChanges(servicePath string, written bool) bool {
 	if !c.systemd() || (!isFile(servicePath) && !written) {
 		return false
 	}
-	if _, code := run(5*time.Second, "systemctl", "--user", "cat", "niri.service"); code != 0 {
+	units := compositorUnits()
+	if len(units) == 0 {
 		return false
 	}
 	userDir := filepath.Join(c.e.ConfigHome, "systemd", "user")
-	correct := filepath.Join(userDir, "niri.service.wants")
 	dirs, _ := filepath.Glob(filepath.Join(userDir, "*.wants"))
 	for _, d := range dirs {
-		if isDir(d) && exists(filepath.Join(d, "inir.service")) && realpath(d) != realpath(correct) {
+		if isDir(d) && exists(filepath.Join(d, "inir.service")) && !slices.Contains(units, strings.TrimSuffix(filepath.Base(d), ".wants")) {
 			return true
 		}
 	}
-	link := filepath.Join(correct, "inir.service")
-	return !isSymlink(link) || readlinkF(link) != readlinkF(servicePath)
+	for _, unit := range units {
+		link := filepath.Join(userDir, unit+".wants", "inir.service")
+		if !isSymlink(link) || readlinkF(link) != readlinkF(servicePath) {
+			return true
+		}
+	}
+	return false
 }
