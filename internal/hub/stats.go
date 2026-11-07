@@ -120,7 +120,7 @@ func (r *Repo) Gather(g *GitHub, repo string, relays []string) (map[string]Stats
 		if answered == 0 {
 			return nil, fail(ExitNetwork, "no relay answered: votes and installs were not counted")
 		}
-		fold(events, out)
+		fold(events, out, false)
 	}
 	return out, nil
 }

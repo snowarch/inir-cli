@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,8 +39,62 @@ func relaysFromEnv(fallback []string) []string {
 	return fallback
 }
 
-// Reactions is the fixed set people react with; anything else is not counted. The shell's Hub.reactions matches it.
+// Reactions are the ones the shell offers first (its Hub.quickReactions); people react with any emoji
+// (validReaction), up to maxReactions on one item.
 var Reactions = []string{"❤️", "🔥", "✨", "😂", "🤯", "👏"}
+
+const maxReactions = 12
+
+// validReaction says whether r is one emoji, any of them: a pictograph with its skin tone, variation selector and
+// joined parts, a flag, a keycap or a tag sequence. Never text: a state can't carry words.
+func validReaction(r string) bool {
+	runes := []rune(r)
+	if len(runes) == 0 || len(runes) > 16 {
+		return false
+	}
+	bases, flags := 0, 0
+	for i, c := range runes {
+		joined := i > 0 && runes[i-1] == 0x200D
+		switch {
+		case c >= 0x1F1E6 && c <= 0x1F1FF: // regional indicators: two make one flag
+			if flags%2 == 0 && !joined {
+				bases++
+			}
+			flags++
+		case c >= 0x1F3FB && c <= 0x1F3FF, c == 0x200D, c == 0xFE0F, c == 0xFE0E, c == 0x20E3, c >= 0xE0020 && c <= 0xE007F:
+			// skin tone, joiner, variation selectors, keycap, tags: parts of the emoji before them
+			if i == 0 {
+				return false
+			}
+		case c >= 0x1F000 && c <= 0x1FAFF, c >= 0x2600 && c <= 0x27BF, c >= 0x2300 && c <= 0x23FF,
+			c >= 0x2B00 && c <= 0x2BFF, c >= 0x2190 && c <= 0x21FF, c >= 0x25A0 && c <= 0x25FF, c >= 0x2900 && c <= 0x297F,
+			c == 0x00A9, c == 0x00AE, c == 0x203C, c == 0x2049, c == 0x2122, c == 0x2139, c == 0x24C2, c == 0x3030,
+			c == 0x303D, c == 0x3297, c == 0x3299:
+			if !joined {
+				bases++
+			}
+		case (c >= '0' && c <= '9') || c == '#' || c == '*': // a keycap's base, only as one
+			if i != 0 || !slices.Contains(runes, 0x20E3) {
+				return false
+			}
+			bases++
+		default:
+			return false
+		}
+	}
+	return bases == 1
+}
+
+// reactionsOf keeps a state's reactions that count: valid, each once, the first maxReactions.
+func reactionsOf(in []string) []string {
+	out := []string{}
+	for _, r := range in {
+		if validReaction(r) && !slices.Contains(out, r) && len(out) < maxReactions {
+			out = append(out, r)
+		}
+	}
+	return out
+}
 
 const (
 	socialKind = 30078
@@ -185,7 +238,7 @@ func (e *Env) Social(ctx context.Context) (string, error) {
 			if a.Vote != "up" && a.Vote != "down" {
 				a.Vote = ""
 			}
-			a.Reactions = slices.DeleteFunc(slices.Clone(a.Reactions), func(r string) bool { return !slices.Contains(Reactions, r) })
+			a.Reactions = reactionsOf(a.Reactions)
 			if a.Installed || a.Vote != "" || len(a.Reactions) > 0 {
 				state.Items[id] = a
 			}
@@ -317,8 +370,9 @@ func fetch(ctx context.Context, relays []string) (map[string]*Event, int) {
 	return newest, answered
 }
 
-// fold counts each person's newest state into the items' stats.
-func fold(events map[string]*Event, stats map[string]Stats) {
+// fold counts each person's newest state into the items' stats: the items already in stats, or every item when
+// open (a live count, which has no catalogue to hold it to).
+func fold(events map[string]*Event, stats map[string]Stats, open bool) {
 	for _, ev := range events {
 		var state socialFile
 		if json.Unmarshal([]byte(ev.Content), &state) != nil || state.V != 1 {
@@ -326,7 +380,7 @@ func fold(events map[string]*Event, stats map[string]Stats) {
 		}
 		for id, a := range state.Items {
 			s, ok := stats[id]
-			if !ok {
+			if !ok && (!open || id == "" || len(id) > 64) {
 				continue
 			}
 			if a.Installed {
@@ -338,21 +392,55 @@ func fold(events map[string]*Event, stats map[string]Stats) {
 			case "down":
 				s.Down++
 			}
-			for _, r := range slicesUnique(a.Reactions) {
-				if slices.Contains(Reactions, r) {
-					if s.Reactions == nil {
-						s.Reactions = map[string]int{}
-					}
-					s.Reactions[r]++
+			for _, r := range reactionsOf(a.Reactions) {
+				if s.Reactions == nil {
+					s.Reactions = map[string]int{}
 				}
+				s.Reactions[r]++
 			}
 			stats[id] = s
 		}
 	}
 }
 
-func slicesUnique(in []string) []string {
-	out := slices.Clone(in)
-	sort.Strings(out)
-	return slices.Compact(out)
+// Counts is what everyone else did with each item, read from the relays now: the shell adds the person's own
+// act to it (hub.social), so a change of theirs shows at once and is never counted twice.
+type Counts struct {
+	At     int64            `json:"at"`
+	Relays int              `json:"relays"`
+	Items  map[string]Stats `json:"items"`
+	Stale  bool             `json:"stale,omitempty"`
+}
+
+// Counts reads every relay, unless the last read is younger than maxAge; with no relay answering it gives the last
+// read, marked stale, or fails.
+func (e *Env) Counts(ctx context.Context, maxAge time.Duration) (*Counts, error) {
+	cache := filepath.Join(e.State, "social-counts.json")
+	var last Counts
+	b, err := os.ReadFile(cache)
+	haveLast := err == nil && json.Unmarshal(b, &last) == nil && last.Items != nil
+	if haveLast && time.Since(time.Unix(last.At, 0)) < maxAge {
+		return &last, nil
+	}
+	events, answered := fetch(ctx, Relays)
+	if answered == 0 {
+		if haveLast {
+			last.Stale = true
+			return &last, nil
+		}
+		return nil, fail(ExitNetwork, "no relay answered")
+	}
+	// the person's own state is theirs to add, from their config: a key never made has published nothing
+	if raw, err := os.ReadFile(filepath.Join(e.State, "key")); err == nil {
+		if k, err := hex.DecodeString(string(bytes.TrimSpace(raw))); err == nil && len(k) == 32 {
+			priv, _ := btcec.PrivKeyFromBytes(k)
+			delete(events, hex.EncodeToString(schnorr.SerializePubKey(priv.PubKey())))
+		}
+	}
+	now := &Counts{At: time.Now().Unix(), Relays: answered, Items: map[string]Stats{}}
+	fold(events, now.Items, true)
+	if os.MkdirAll(e.State, 0o755) == nil {
+		_ = writeAtomic(cache, append(marshal(now), '\n'))
+	}
+	return now, nil
 }
