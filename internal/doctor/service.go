@@ -246,16 +246,17 @@ func (c *checker) serviceSyncChanges(asset, target string) bool {
 	return false
 }
 
-// compositorUnits is every installed compositor iNiR runs on (setup's
-// ensure_user_inir_service_enabled wires the shell under each).
+// compositorUnits is both compositors iNiR runs on as soon as either is
+// installed (setup's ensure_user_inir_service_enabled wires the shell under
+// each, so one installed after iNiR starts it too); nil when neither is.
 func compositorUnits() []string {
-	var units []string
-	for _, unit := range []string{"niri.service", "umbriel.service"} {
+	both := []string{"niri.service", "umbriel.service"}
+	for _, unit := range both {
 		if _, code := run(5*time.Second, "systemctl", "--user", "cat", unit); code == 0 {
-			units = append(units, unit)
+			return both
 		}
 	}
-	return units
+	return nil
 }
 
 // wiringChanges is whether ensure_user_inir_service_enabled would move or
