@@ -51,10 +51,11 @@ func (r *Repo) pulls() []Pull {
 
 // Stats is one item's line in stats.json.
 type Stats struct {
-	Downloads  int    `json:"downloads"`
-	Up         int    `json:"up"`
-	Down       int    `json:"down"`
-	Discussion string `json:"discussion"`
+	Downloads int            `json:"downloads"`
+	Installs  int            `json:"installs"`
+	Up        int            `json:"up"`
+	Down      int            `json:"down"`
+	Reactions map[string]int `json:"reactions,omitempty"`
 }
 
 // stats reads stats.json at the root, else the one the stats workflow keeps on the "stats" branch.
@@ -81,9 +82,9 @@ func (r *Repo) store(item map[string]any, id, folder string, stats map[string]St
 		item["added"] = added
 	}
 	if s, ok := stats[id]; ok {
-		item["downloads"], item["votesUp"], item["votesDown"] = s.Downloads, s.Up, s.Down
-		if strings.HasPrefix(s.Discussion, "https://github.com/") {
-			item["discussion"] = s.Discussion
+		item["downloads"], item["installs"], item["votesUp"], item["votesDown"] = s.Downloads, s.Installs, s.Up, s.Down
+		if len(s.Reactions) > 0 {
+			item["reactions"] = s.Reactions
 		}
 	}
 	for _, p := range pulls {

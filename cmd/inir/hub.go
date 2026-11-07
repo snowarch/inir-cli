@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,7 +26,7 @@ const hubUsage = `Usage: inir hub <verb> [args] [--json]
   remove ID...
   fetch ID... [--for VERSION]           download into the cache only, checked against that iNiR version
   link DIR...                           link a plugin folder of your own into the shell, to work on it
-  rate ID up|down|clear                 vote on an item (through gh, else its reviews page opens)
+  social                                publish your votes, reactions and installs (hub.social in config.json)
   open [ID]                             the Hub page in your family's Settings, at one item if given
   refresh | changed KIND                ask the running shell to read the hub again
 
@@ -65,12 +66,10 @@ func runHub(args []string) (int, bool) {
 		return 0, true
 	case "check", "validate", "audit", "bumps", "new", "build", "preview", "stats", "submit":
 		return runHubRepo(verb, rest, asJSON), true
-	case "rate":
-		if len(rest) != 2 {
-			fmt.Fprintln(os.Stderr, "usage: inir hub rate ID up|down|clear")
-			return 2, true
-		}
-		line, err := hub.Default().Rate(rest[0], rest[1])
+	case "social":
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		line, err := hub.Default().Social(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "inir hub: "+err.Error())
 			return hub.Code(err), true
@@ -432,9 +431,12 @@ func runHubRepo(verb string, args []string, asJSON bool) int {
 		fmt.Println("next: edit it, add preview.webp, then: inir hub validate " + dest)
 		return 0
 	case "stats":
-		target, category := flag("--repo", hub.HubRepo), flag("--category", "")
-		out := flag("--out", repo.Root+"/stats.json")
-		stats, err := repo.Gather(hub.GitHubFromEnv(), target, category, slices.Contains(args, "--open"))
+		target, out := flag("--repo", hub.HubRepo), flag("--out", repo.Root+"/stats.json")
+		relays := hub.Relays
+		if slices.Contains(args, "--no-relays") {
+			relays = nil
+		}
+		stats, err := repo.Gather(hub.GitHubFromEnv(), target, relays)
 		repo.Report()
 		if err == nil {
 			err = hub.WriteStats(out, stats)

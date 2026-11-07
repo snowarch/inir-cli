@@ -4,16 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-// A GitHub that knows one packages release and two Discussions.
+// A GitHub that knows one packages release.
 func fakeGitHub(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -24,20 +22,6 @@ func fakeGitHub(t *testing.T) *httptest.Server {
 				{"name": "clock-1.1.0.tar.gz", "download_count": 2},
 				{"name": "web-app-2.0.0-beta.1.tar.gz", "download_count": 5},
 				{"name": "notes.txt", "download_count": 99}]`))
-		case r.URL.Path == "/graphql":
-			b, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(b), "discussions(") {
-				t.Errorf("unexpected query %s", b)
-			}
-			w.Write([]byte(`{"data": {"repository": {"id": "R1",
-				"discussionCategories": {"nodes": [{"id": "C1", "slug": "reviews"}, {"id": "C2", "slug": "ideas"}]},
-				"discussions": {"pageInfo": {"hasNextPage": false, "endCursor": ""}, "nodes": [
-					{"title": "clock", "url": "https://github.com/o/hub/discussions/1", "category": {"slug": "reviews"},
-					 "reactionGroups": [{"content": "THUMBS_UP", "reactors": {"totalCount": 9}}, {"content": "THUMBS_DOWN", "reactors": {"totalCount": 1}}]},
-					{"title": "clock", "url": "https://github.com/o/hub/discussions/5", "category": {"slug": "reviews"},
-					 "reactionGroups": [{"content": "THUMBS_UP", "reactors": {"totalCount": 100}}]},
-					{"title": "web-app", "url": "https://github.com/o/hub/discussions/2", "category": {"slug": "ideas"},
-					 "reactionGroups": [{"content": "THUMBS_UP", "reactors": {"totalCount": 3}}]}]}}}}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -57,20 +41,6 @@ func TestStatsFromGitHub(t *testing.T) {
 		t.Errorf("downloads per item, every version summed: %v", counts)
 	}
 
-	threads, repoID, categoryID, err := g.discussions("o/hub", "reviews")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if repoID != "R1" || categoryID != "C1" {
-		t.Errorf("ids: repo %q category %q", repoID, categoryID)
-	}
-	if c := threads["clock"]; c.Up != 9 || c.Down != 1 || !strings.HasSuffix(c.URL, "/1") {
-		t.Errorf("the first thread of a title keeps the votes: %+v", c)
-	}
-	if _, ok := threads["web-app"]; ok {
-		t.Errorf("a thread in another category counted: %v", threads)
-	}
-
 	none, err := (&GitHub{API: srv.URL}).downloads("o/other")
 	if err != nil || len(none) != 0 {
 		t.Errorf("no packages release yet should be zero downloads, got %v %v", none, err)
@@ -80,7 +50,7 @@ func TestStatsFromGitHub(t *testing.T) {
 func TestStatsFileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "stats.json")
-	want := map[string]Stats{"clock": {Downloads: 42, Up: 9, Down: 1, Discussion: "https://github.com/o/hub/discussions/1"}}
+	want := map[string]Stats{"clock": {Downloads: 42, Installs: 3, Up: 9, Down: 1, Reactions: map[string]int{"🔥": 2}}}
 	if err := WriteStats(p, want); err != nil {
 		t.Fatal(err)
 	}
