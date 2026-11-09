@@ -224,8 +224,12 @@ func (c *checker) dependencies(s *step) {
 	}
 
 	lv2 := false
-	// LV2_PATH first: where the host says its bundles are (NixOS keeps them in its profiles, never /usr)
-	for _, dir := range append(filepath.SplitList(os.Getenv("LV2_PATH")), "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2") {
+	// LV2_PATH first, as LV2 hosts read it, then the Nix profiles (NixOS sets no LV2_PATH and has no /usr/lib/lv2)
+	lv2Dirs := filepath.SplitList(os.Getenv("LV2_PATH"))
+	for _, p := range nixProfiles() {
+		lv2Dirs = append(lv2Dirs, filepath.Join(p, "lib", "lv2"))
+	}
+	for _, dir := range append(lv2Dirs, "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2") {
 		if globAny(filepath.Join(dir, "lsp-plugins*.lv2")) || globAny(filepath.Join(dir, "lsp*.lv2")) {
 			lv2 = true
 			break
@@ -1331,14 +1335,28 @@ func pluginDirs(sub string) []string {
 	if dir != "" {
 		dirs = append(dirs, filepath.Join(dir, sub))
 	}
-	// QT_PLUGIN_PATH as Qt itself reads it: NixOS has no plugin dir under /usr, its profiles name theirs here
+	// QT_PLUGIN_PATH as Qt itself reads it, then the Nix profiles: NixOS has no plugin dir under /usr, and the shell
+	// on its own Qt runs without the session's QT_PLUGIN_PATH
 	for _, d := range filepath.SplitList(os.Getenv("QT_PLUGIN_PATH")) {
 		dirs = append(dirs, filepath.Join(d, sub))
+	}
+	for _, p := range nixProfiles() {
+		dirs = append(dirs, filepath.Join(p, "lib", "qt-6", "plugins", sub))
 	}
 	for _, d := range []string{"/usr/lib/qt6/plugins", "/usr/lib64/qt6/plugins", "/usr/lib/x86_64-linux-gnu/qt6/plugins"} {
 		dirs = append(dirs, filepath.Join(d, sub))
 	}
 	return dirs
+}
+
+// nixProfiles: where Nix installs what a person or the system has (the person's, NixOS's per-user and system ones).
+func nixProfiles() []string {
+	return []string{
+		filepath.Join(os.Getenv("HOME"), ".nix-profile"),
+		filepath.Join("/etc/profiles/per-user", os.Getenv("USER")),
+		"/run/current-system/sw",
+		"/nix/var/nix/profiles/default",
+	}
 }
 
 func anyFile(dirs []string, name string) bool {
