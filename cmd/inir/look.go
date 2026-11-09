@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/snowarch/inir-cli/internal/buildinfo"
 	"github.com/snowarch/inir-cli/internal/look"
+	"github.com/snowarch/inir-cli/internal/netdown"
 	"github.com/snowarch/inir-cli/internal/ui"
 )
 
@@ -341,6 +343,9 @@ func fetchHTTPS(url string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if cause := netdown.Cause(resp); cause != "" {
+		return nil, errors.New(cause)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", url, resp.Status)
 	}

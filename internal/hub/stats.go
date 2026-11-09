@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/snowarch/inir-cli/internal/netdown"
 )
 
 // What people did with the hub's items, gathered with no server of ours: downloads are the download counts of
@@ -65,6 +67,9 @@ func (g *GitHub) do(method, path string, body, out any) (int, error) {
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if cause := netdown.Cause(resp); cause != "" {
+		return resp.StatusCode, fail(ExitNetwork, "%s", cause)
+	}
 	if resp.StatusCode >= 300 {
 		return resp.StatusCode, fail(ExitNetwork, "github %s %s: HTTP %d %s", method, path, resp.StatusCode, strings.TrimSpace(string(b)))
 	}

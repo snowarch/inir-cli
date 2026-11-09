@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/snowarch/inir-cli/internal/netdown"
 	"github.com/snowarch/inir-cli/internal/shell"
 )
 
@@ -319,6 +320,9 @@ func (e *Env) fetch(raw string, limit int64) ([]byte, error) {
 		}
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
+			if cause := netdown.Cause(resp); cause != "" {
+				return nil, fail(ExitNetwork, "%s", cause)
+			}
 			return nil, fail(ExitNetwork, "%s: HTTP %d", raw, resp.StatusCode)
 		}
 		body = resp.Body
