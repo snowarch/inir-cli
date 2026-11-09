@@ -134,9 +134,13 @@ func (c *checker) service(s *step) {
 			}
 		}
 		for _, unit := range expected {
-			if !exists(filepath.Join(userDir, unit+".wants", "inir.service")) {
-				missing = append(missing, unit)
+			if exists(filepath.Join(userDir, unit+".wants", "inir.service")) {
+				continue
 			}
+			if strategy == "package-manager" && wiredBySystem(unit) {
+				continue
+			}
+			missing = append(missing, unit)
 		}
 		if len(missing) > 0 {
 			s.fixable("inir.service not wired to "+strings.Join(missing, " "), "Enabled inir.service for "+strings.Join(missing, " "))
