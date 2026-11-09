@@ -307,7 +307,7 @@ type font struct{ pattern, display string }
 var (
 	criticalFonts  = []font{{"Material Symbols Rounded", "Material Symbols Rounded"}, {"JetBrainsMono Nerd", "JetBrainsMono Nerd Font"}}
 	importantFonts = []font{{"Roboto Flex", "Roboto Flex"}, {"Gabarito", "Gabarito"}, {"Oxanium", "Oxanium"}, {"Noto Color Emoji", "Noto Color Emoji"}}
-	optionalFonts  = []font{{"Rubik", "Rubik"}, {"Space Grotesk", "Space Grotesk"}, {"Readex Pro", "Readex Pro"}, {"Twemoji", "Twemoji"}}
+	optionalFonts  = []font{{"Rubik", "Rubik"}, {"Space Grotesk", "Space Grotesk"}, {"Readex Pro", "Readex Pro"}, {`Twemoji\|Twitter Color Emoji`, "Twemoji"}}
 	// Fonts _try_install_font_package can fetch without an AUR helper.
 	downloadableFonts = map[string]bool{"Material Symbols Rounded": true, "JetBrainsMono Nerd Font": true,
 		"Roboto Flex": true, "Gabarito": true, "Oxanium": true}
@@ -448,15 +448,19 @@ func configuredFonts(path, runtime string) []string {
 }
 
 // bre turns a grep basic regular expression into Go syntax for the plain
-// names doctor matches: only `.`, `*`, `^`, `$` and brackets keep a meaning.
+// names doctor matches: only `.`, `*`, `^`, `$`, brackets and GNU's `\|`
+// (one font under two names) keep a meaning.
 func bre(p string) string {
 	var b strings.Builder
-	for _, r := range p {
-		switch r {
-		case '+', '?', '(', ')', '{', '}', '|':
-			b.WriteString(`\` + string(r))
+	for i := 0; i < len(p); i++ {
+		switch c := p[i]; {
+		case c == '\\' && i+1 < len(p) && p[i+1] == '|':
+			b.WriteByte('|')
+			i++
+		case strings.IndexByte("+?(){}|", c) >= 0:
+			b.WriteString(`\` + string(c))
 		default:
-			b.WriteRune(r)
+			b.WriteByte(c)
 		}
 	}
 	return b.String()
