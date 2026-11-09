@@ -301,8 +301,7 @@ func (c *checker) wiringChanges(servicePath string, written bool) bool {
 		if isSymlink(link) && readlinkF(link) == readlinkF(servicePath) {
 			continue
 		}
-		// a package may wire it for everyone (NixOS: /etc/systemd/user/niri.service.wants): systemd's view decides
-		if packaged && !isSymlink(link) && wantsInir(unit) {
+		if packaged && !isSymlink(link) && wiredBySystem(unit) {
 			continue
 		}
 		return true
@@ -310,8 +309,18 @@ func (c *checker) wiringChanges(servicePath string, written bool) bool {
 	return false
 }
 
-// wantsInir: systemd's own Wants of the compositor unit names inir.service, wherever the link lives.
-func wantsInir(unit string) bool {
-	out, _ := stdout(5*time.Second, "systemctl", "--user", "show", "-p", "Wants", "--value", unit)
-	return slices.Contains(strings.Fields(out), "inir.service")
+// wiredBySystem: systemd's own view of a compositor unit, for a package that wires inir.service for everyone
+// (NixOS: /etc/systemd/user/niri.service.wants). It wants inir.service wherever the link lives, or it is not
+// installed and starts nothing yet.
+func wiredBySystem(unit string) bool {
+	out, _ := stdout(5*time.Second, "systemctl", "--user", "show", "-p", "LoadState", "-p", "Wants", unit)
+	for _, line := range lines(out) {
+		if line == "LoadState=not-found" {
+			return true
+		}
+		if v, ok := strings.CutPrefix(line, "Wants="); ok && slices.Contains(strings.Fields(v), "inir.service") {
+			return true
+		}
+	}
+	return false
 }
