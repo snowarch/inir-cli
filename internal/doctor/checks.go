@@ -1357,6 +1357,7 @@ func pluginDirs(sub string) []string {
 func nixProfiles() []string {
 	return []string{
 		filepath.Join(os.Getenv("HOME"), ".nix-profile"),
+		filepath.Join(os.Getenv("HOME"), ".local", "state", "nix", "profile"),
 		filepath.Join("/etc/profiles/per-user", os.Getenv("USER")),
 		"/run/current-system/sw",
 		"/nix/var/nix/profiles/default",

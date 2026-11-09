@@ -47,7 +47,8 @@ func (c *checker) service(s *step) {
 			s.hint("Reinstall the iNiR shell package")
 			return
 		}
-		if frag == servicePath {
+		// Home Manager's unit is the package's own, linked from the store
+		if frag == servicePath && !nixManaged(servicePath) {
 			packaged := ""
 			for _, p := range []string{"/usr/lib/systemd/user/inir.service", "/usr/local/lib/systemd/user/inir.service", "/lib/systemd/user/inir.service"} {
 				if isFile(p) {
@@ -311,6 +312,11 @@ func (c *checker) wiringChanges(servicePath string, written bool) bool {
 		return true
 	}
 	return false
+}
+
+// nixManaged is setup's nix_managed: a link into the Nix store (a file Home Manager owns).
+func nixManaged(path string) bool {
+	return isSymlink(path) && strings.HasPrefix(readlinkF(path), "/nix/store/")
 }
 
 // wiredBySystem: systemd's own view of a compositor unit, for a package that wires inir.service for everyone
