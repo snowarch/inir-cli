@@ -295,11 +295,23 @@ func (c *checker) wiringChanges(servicePath string, written bool) bool {
 			return true
 		}
 	}
+	packaged := c.e.Version().UpdateStrategy() == "package-manager"
 	for _, unit := range units {
 		link := filepath.Join(userDir, unit+".wants", "inir.service")
-		if !isSymlink(link) || readlinkF(link) != readlinkF(servicePath) {
-			return true
+		if isSymlink(link) && readlinkF(link) == readlinkF(servicePath) {
+			continue
 		}
+		// a package may wire it for everyone (NixOS: /etc/systemd/user/niri.service.wants): systemd's view decides
+		if packaged && !isSymlink(link) && wantsInir(unit) {
+			continue
+		}
+		return true
 	}
 	return false
+}
+
+// wantsInir: systemd's own Wants of the compositor unit names inir.service, wherever the link lives.
+func wantsInir(unit string) bool {
+	out, _ := stdout(5*time.Second, "systemctl", "--user", "show", "-p", "Wants", "--value", unit)
+	return slices.Contains(strings.Fields(out), "inir.service")
 }

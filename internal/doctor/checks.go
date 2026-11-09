@@ -224,7 +224,8 @@ func (c *checker) dependencies(s *step) {
 	}
 
 	lv2 := false
-	for _, dir := range []string{"/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2"} {
+	// LV2_PATH first: where the host says its bundles are (NixOS keeps them in its profiles, never /usr)
+	for _, dir := range append(filepath.SplitList(os.Getenv("LV2_PATH")), "/usr/lib/lv2", "/usr/lib64/lv2", "/usr/local/lib/lv2", "/usr/local/lib64/lv2") {
 		if globAny(filepath.Join(dir, "lsp-plugins*.lv2")) || globAny(filepath.Join(dir, "lsp*.lv2")) {
 			lv2 = true
 			break
@@ -1329,6 +1330,10 @@ func pluginDirs(sub string) []string {
 	}
 	if dir != "" {
 		dirs = append(dirs, filepath.Join(dir, sub))
+	}
+	// QT_PLUGIN_PATH as Qt itself reads it: NixOS has no plugin dir under /usr, its profiles name theirs here
+	for _, d := range filepath.SplitList(os.Getenv("QT_PLUGIN_PATH")) {
+		dirs = append(dirs, filepath.Join(d, sub))
 	}
 	for _, d := range []string{"/usr/lib/qt6/plugins", "/usr/lib64/qt6/plugins", "/usr/lib/x86_64-linux-gnu/qt6/plugins"} {
 		dirs = append(dirs, filepath.Join(d, sub))
