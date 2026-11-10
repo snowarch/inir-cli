@@ -50,7 +50,7 @@ var Steps = []Step{
 	{18, "theme-colors", "Checking theme colors", true, (*checker).themeColors},
 	{19, "qt-theming", "Checking Qt theming", true, (*checker).qtTheming},
 	{20, "conflicting-services", "Checking conflicting services", true, (*checker).conflictingServices},
-	{21, "conflicting-shells", "Checking conflicting shells", false, (*checker).conflictingShells},
+	{21, "conflicting-shells", "Checking other shells", false, (*checker).conflictingShells},
 	{22, "wallpapers", "Checking wallpaper health", true, (*checker).wallpapers},
 	{23, "environment", "Checking environment variables", true, (*checker).environment},
 	{24, "niri-config", "Checking Niri config", false, (*checker).niriConfig},
@@ -1483,12 +1483,12 @@ func (c *checker) conflictingShells(s *step) {
 		s.pass("Conflicting shells (package manager unsupported, skipped)")
 		return
 	}
+	// They can stay: iNiR runs on its own runtime and config; only two shells in one session clash.
 	if len(found) > 0 {
-		s.fail("Conflicting Quickshell shells installed: " + strings.Join(found, " "))
-		s.hint("These must be removed for iNiR to work. Run: ./setup install")
+		s.pass("Other shells installed: " + strings.Join(found, " ") + " (fine; don't start them in iNiR's session)")
 		return
 	}
-	s.pass("No conflicting Quickshell shells")
+	s.pass("No other Quickshell shells")
 }
 
 func (c *checker) wallpapers(s *step) {

@@ -81,9 +81,12 @@ func TestTailShowsWhatATerminalWould(t *testing.T) {
 }
 
 func TestReviewSaysWhatHappens(t *testing.T) {
-	s := System{OS: "arch", FirstRun: true, Configs: true, Remove: []string{"dms-shell"}}
+	s := System{OS: "arch", FirstRun: true, Configs: true, Others: []string{"dms-shell"}}
+	if r := Review(s, Packages{}, Choices{Backup: true, RemoveOthers: true}); !strings.Contains(r, "Removes dms-shell") {
+		t.Errorf("review hides the removal:\n%s", r)
+	}
 	r := Review(s, Packages{}, Choices{Backup: true, Extras: []string{extraSDDM}})
-	for _, want := range []string{"pacman -Syu", "Removes dms-shell", "Backs up your configs", "login screen", "password once"} {
+	for _, want := range []string{"pacman -Syu", "Keeps dms-shell", "Backs up your configs", "login screen", "password once"} {
 		if !strings.Contains(r, want) {
 			t.Errorf("review lacks %q:\n%s", want, r)
 		}

@@ -23,6 +23,8 @@ type Choices struct {
 	// nothing (Umbriel gets iNiR when installed or first logged into).
 	Compositor    string
 	askCompositor bool
+	// RemoveOthers removes the other shells found; they stay by default.
+	RemoveOthers bool
 }
 
 const (
@@ -47,8 +49,8 @@ func Welcome(w io.Writer, t ui.Theme, s System) {
 		what = "over the iNiR already here (your settings stay)"
 	}
 	row("Install", what)
-	if len(s.Remove) > 0 {
-		row("Found", strings.Join(s.Remove, ", ")+" (another shell)")
+	if len(s.Others) > 0 {
+		row("Found", strings.Join(s.Others, ", ")+" (another shell: it can stay)")
 	}
 	lipgloss.Fprintln(w, "\n    "+lipgloss.NewStyle().Foreground(t.Muted).Render(
 		"Pick what you want first. Nothing changes until you say Install."))
@@ -76,7 +78,11 @@ func Ask(t ui.Theme, s System, pk Packages, backupDir string, accessible bool, a
 	// An explicit --compositor goes to setup as it is; otherwise the form asks.
 	c.askCompositor = !slices.ContainsFunc(args, func(a string) bool { return a == "--compositor" || strings.HasPrefix(a, "--compositor=") })
 	if c.askCompositor && s.Umbriel {
+		// Another shell here most likely lives on Umbriel: iNiR on Niri alone keeps them apart.
 		c.Compositor = "both"
+		if len(s.Others) > 0 {
+			c.Compositor = "niri"
+		}
 	}
 	run := func(groups ...*huh.Group) error {
 		err := huh.NewForm(groups...).
@@ -173,6 +179,16 @@ func picks(t ui.Theme, s System, pk Packages, backupDir string, c *Choices) []*h
 		}
 		groups = append(groups, huh.NewGroup(where))
 	}
+	if len(s.Others) > 0 {
+		groups = append(groups, huh.NewGroup(
+			huh.NewConfirm().
+				Title("Remove "+strings.Join(s.Others, ", ")+"?").
+				Description("iNiR runs on its own runtime and config, so the other shell can stay. Just don't start both in the same session.").
+				Affirmative("Remove it").
+				Negative("Keep it").
+				Value(&c.RemoveOthers),
+		))
+	}
 	if s.Configs {
 		groups = append(groups, huh.NewGroup(
 			huh.NewConfirm().
@@ -202,8 +218,10 @@ func Review(s System, pk Packages, c Choices) string {
 	if s.OS == "arch" {
 		line("Updates the system first (pacman -Syu), as Arch expects")
 	}
-	if len(s.Remove) > 0 {
-		line("Removes %s: it takes Quickshell's place", strings.Join(s.Remove, ", "))
+	if len(s.Others) > 0 && c.RemoveOthers {
+		line("Removes %s", strings.Join(s.Others, ", "))
+	} else if len(s.Others) > 0 {
+		line("Keeps %s; iNiR starts only where you set it up", strings.Join(s.Others, ", "))
 	}
 	if len(s.Replace) > 0 {
 		line("Swaps %s for the stable Quickshell", strings.Join(s.Replace, ", "))
@@ -264,7 +282,8 @@ func (c Choices) Flags(optional []Group) (args, env []string) {
 		"INIR_BACKUP_CONFIGS="+yn(c.Backup),
 		"INIR_INSTALL_WALLS="+yn(slices.Contains(c.Extras, extraWalls)),
 		"INIR_INSTALL_YAMIS="+yn(slices.Contains(c.Extras, extraYAMIS)),
-		"INIR_INSTALL_SDDM_THEME="+yn(slices.Contains(c.Extras, extraSDDM)))
+		"INIR_INSTALL_SDDM_THEME="+yn(slices.Contains(c.Extras, extraSDDM)),
+		"INIR_REMOVE_OTHER_SHELLS="+yn(c.RemoveOthers))
 	if slices.Contains(c.Extras, extraFish) {
 		env = append(env, "INIR_SET_DEFAULT_SHELL=true")
 	}
