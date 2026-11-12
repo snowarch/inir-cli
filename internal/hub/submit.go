@@ -116,7 +116,7 @@ func (r *Repo) Submit(dir string, dryRun bool, say func(string)) error {
 		return err
 	}
 	if !dryRun {
-		say("opened " + url + ": a maintainer reviews it; CI posts the same card it showed you")
+		say("opened " + url + ": once CI passes, the reviewer merges it or comments what to fix")
 	}
 	return nil
 }
