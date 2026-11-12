@@ -241,6 +241,9 @@ func (r *Repo) partsWhole(folder string) {
 				r.errorf(nativeFile, `"parts" → "%s": %q is not a file in this folder`, name, file)
 			}
 		}
+		if panel, _ := parts["panel"].(string); panel != "" && text(native, "kind") == "component" {
+			r.opensByMouse(folder, filepath.Base(folder))
+		}
 	}
 	if fams, present := native["families"]; present {
 		list, isList := fams.([]any)
@@ -253,6 +256,40 @@ func (r *Repo) partsWhole(folder string) {
 			r.errorf(nativeFile, `"families" lists the family ids it is worn with, e.g. ["iris"]; leave it out for every family`)
 		}
 	}
+}
+
+// opensByMouse: the shell lists every component with a panel in each family's app launcher, by its name, and opening
+// it runs `inir <id> toggle`. So one IpcHandler answers to the id itself with a toggle in it.
+func (r *Repo) opensByMouse(folder, id string) {
+	for _, p := range filesOf(folder) {
+		if filepath.Ext(p) != ".qml" {
+			continue
+		}
+		b, _ := os.ReadFile(p)
+		lines := strings.Split(string(b), "\n")
+		for i := 0; i < len(lines); i++ {
+			if !ipcOpenRE.MatchString(lines[i]) {
+				continue
+			}
+			target, toggles, depth := "", false, 0
+			for ; i < len(lines); i++ {
+				if m := targetRE.FindStringSubmatch(lines[i]); m != nil && target == "" {
+					target = m[1]
+				}
+				if m := ipcFuncRE.FindStringSubmatch(lines[i]); m != nil && depth == 1 && m[1] == "toggle" {
+					toggles = true
+				}
+				depth += strings.Count(lines[i], "{") - strings.Count(lines[i], "}")
+				if depth <= 0 {
+					break
+				}
+			}
+			if target == id && toggles {
+				return
+			}
+		}
+	}
+	r.errorf(filepath.Join(folder, "plugin.json"), `a component with a panel opens from every family's app launcher, listed by its "name": its panel needs `+"`IpcHandler { target: %q; function toggle(): void { ... } }`"+`, which the launcher runs as `+"`inir %s toggle`", id, id)
 }
 
 func sortedKeysAny(m map[string]any) []string {

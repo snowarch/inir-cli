@@ -277,6 +277,26 @@ func TestCheckParts(t *testing.T) {
 	}
 }
 
+func TestCheckOpensByMouse(t *testing.T) {
+	panel := func(target, fn string) string {
+		return "import QtQuick\nimport Quickshell.Io\nItem {\n    /// Media corner.\n    IpcHandler {\n        target: \"" + target + "\"\n        /// Opens or closes it.\n        function " + fn + "(): void {}\n    }\n}\n"
+	}
+	for _, c := range []struct {
+		target, fn string
+		ok         bool
+	}{{"corner", "toggle", true}, {"cornerPanel", "toggle", false}, {"corner", "open", false}} {
+		r, write := checkRepo(t)
+		write(map[string]string{
+			"components/corner/hub.json":    `{"version": "1.0.0", "provides": "modules/corner"}`,
+			"components/corner/plugin.json": `{"id": "corner", "kind": "component", "parts": {"panel": "Panel.qml"}}`,
+			"components/corner/Panel.qml":   panel(c.target, c.fn),
+		})
+		if errs := checkAs(r, false); has(errs, "app launcher") == c.ok {
+			t.Errorf("target %q function %q: ok=%v, got %v", c.target, c.fn, c.ok, errs)
+		}
+	}
+}
+
 func TestCheckReach(t *testing.T) {
 	big := func(n int, line string) string {
 		var b []byte
