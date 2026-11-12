@@ -334,7 +334,7 @@ func widgetEntries(native map[string]any, id string) [][2]string {
 	if file != "" {
 		out = append(out, [2]string{"desktop", file})
 	}
-	for _, face := range [][2]string{{"iris", "island"}, {"waffle", "waffle-widgets"}} {
+	for _, face := range [][2]string{{"iris", "island"}, {"waffle", "waffle-widgets"}, {"ii", "sidebar"}} {
 		if m, ok := native[face[0]].(map[string]any); ok && strings.TrimSpace(text(m, "main")) != "" {
 			out = append(out, [2]string{face[1], strings.TrimSpace(text(m, "main"))})
 		}
@@ -434,7 +434,7 @@ func (r *Repo) check(folder string) *entry {
 	case "widget":
 		points := widgetEntries(native, id)
 		if len(points) == 0 {
-			r.errorf(nativeFile, "declares no surface: give it main, iris.main or waffle.main")
+			r.errorf(nativeFile, "declares no surface: give it main, iris.main, waffle.main or ii.main")
 		}
 		var surfaces, families []string
 		for _, p := range points {
@@ -455,6 +455,9 @@ func (r *Repo) check(folder string) *entry {
 		}
 		if slices.Contains(surfaces, "waffle-widgets") {
 			families = append(families, "waffle")
+		}
+		if slices.Contains(surfaces, "sidebar") && !slices.Contains(families, "material") {
+			families = append(families, "material")
 		}
 		e.item["surfaces"], e.item["families"] = surfaces, families
 		e.item["icon"] = orDefault(text(native, "icon"), "widgets")
