@@ -569,6 +569,20 @@ func (r *Repo) check(folder string) *entry {
 			r.errorf(hubFile, `"requires" lists the ids of the plugins it needs`)
 		}
 		e.item["surfaces"], e.item["icon"], e.item["provides"] = []string{"shell"}, orDefault(text(native, "icon"), "extension"), provides
+		// The shell loads a component only in the families its plugin.json names (panelFamily ids, none: every
+		// family), so the Hub of another family must not offer it. The catalogue calls ii "material".
+		if kind.Name == "component" {
+			fams, _ := list(native, "families")
+			names := []string{}
+			for _, f := range fams {
+				if s, _ := f.(string); s == "ii" {
+					names = append(names, "material")
+				} else if s != "" {
+					names = append(names, s)
+				}
+			}
+			e.item["families"] = names
+		}
 		if kind.Name == "design" {
 			e.item["surfaces"], e.item["families"], e.item["icon"] = []string{"look"}, r.designRules(folder, native), orDefault(text(native, "icon"), "brush")
 		}
