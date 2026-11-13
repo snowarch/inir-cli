@@ -26,13 +26,14 @@ import (
 // reproducibly (the same folder always packs to the same bytes, so a sha256 only changes with content).
 
 var Permissions = map[string]string{
-	"process": "Runs commands on your computer",
-	"network": "Talks to the internet",
-	"files":   "Reads or writes files outside its own folder",
-	"inject":  "Injects scripts into the site it opens",
+	"process":  "Runs commands on your computer",
+	"network":  "Talks to the internet",
+	"files":    "Reads or writes files outside its own folder",
+	"inject":   "Injects scripts into the site it opens",
+	"settings": "Changes your settings",
 }
 
-var permissionOrder = []string{"process", "network", "files", "inject"}
+var permissionOrder = []string{"process", "network", "files", "inject", "settings"}
 
 var (
 	handleRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}$`)
@@ -73,6 +74,8 @@ var detect = map[string]*regexp.Regexp{
 	"process": regexp.MustCompile(`\bProcess\s*\{|execDetached|ShellExec\.|\bbash\s+-c\b|\bsh\s+-c\b`),
 	"network": regexp.MustCompile(`XMLHttpRequest|\bcurl\b|\bwget\b|\bWebSocket\b|\bfetch\s*\(`),
 	"files":   regexp.MustCompile(`\bFileView\s*\{|\bFolderListModel\s*\{|\bwriteAdapter\b`),
+	// the shell's settings door: only rows the person's Settings shows, each change with an Undo
+	"settings": regexp.MustCompile(`\bShellSettings\.request\s*\(`),
 }
 
 // Repo is a hub repo checkout (the folder holding schema/hub.schema.json).
