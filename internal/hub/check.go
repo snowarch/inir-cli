@@ -139,7 +139,7 @@ func (r *Repo) ownLane(folder, id string) {
 			}
 			where := fmt.Sprintf("%s:%d", p, i+1)
 			if configWriteRE.MatchString(code) {
-				r.errorf(where, "writes the person's settings: only families do. A widget's options are its widget.json \"options\"; anything else keeps them in its own file (a FileView on Directories.pluginFile(\"%s\")), so removing it leaves their settings as they were. To change a setting the person's Settings shows, ask ShellSettings.request({key: value}, \"%s\") and declare the settings permission", id, id)
+				r.errorf(where, "writes the person's settings: only families do. A widget's options are its widget.json \"options\"; anything else keeps them in its own file (a FileView on Directories.pluginFile(\"%s\")), so removing it leaves their settings as they were", id)
 			}
 			if m := targetRE.FindStringSubmatch(code); m != nil && !strings.HasPrefix(laneKey(m[1]), want) {
 				r.errorf(where, "IPC target %q: start it with your id (%q), so it never answers for the shell or another plugin", m[1], lowerCamel(id))
