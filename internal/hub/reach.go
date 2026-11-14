@@ -35,6 +35,10 @@ var offered = map[string][]string{
 	"waffle": {"looks"},
 }
 
+// widgetOffered: what a widget may import beyond offered: iRiS's desktop widget kit, for its iRiS and Prism desktop faces
+// (widget.json `iris.desktop`, guides/widgets.md).
+var widgetOffered = map[string][]string{"iris": {"widgets"}}
+
 var (
 	familyImportRE = regexp.MustCompile(`^\s*import\s+qs\.modules\.(ii|iris|waffle)((?:\.\w+)*)`)
 	// ["qs", "-c", …], "quickshell -p …", `qs ipc call …`: the shell's binary started by name.
@@ -135,8 +139,9 @@ func (r *Repo) reach(added map[string][]int, kindDir string) {
 			if m := familyImportRE.FindStringSubmatch(line); m != nil {
 				rest := strings.TrimPrefix(m[2], ".")
 				first, _, _ := strings.Cut(rest, ".")
-				// a Design's Island face also takes the Island face's kit
-				ownKit := kindDir == "designs" && slices.ContainsFunc(designOffered[m[1]], func(kit string) bool { return rest == kit || strings.HasPrefix(rest, kit+".") })
+				// a Design's Island face also takes the Island face's kit, a widget's desktop face the desktop widget kit
+				kits := map[string]map[string][]string{"designs": designOffered, "widgets": widgetOffered}[kindDir]
+				ownKit := slices.ContainsFunc(kits[m[1]], func(kit string) bool { return rest == kit || strings.HasPrefix(rest, kit+".") })
 				if module := "qs.modules." + m[1] + m[2]; !slices.Contains(offered[m[1]], first) && !ownKit {
 					inside[module] = append(inside[module], where)
 				}

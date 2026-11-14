@@ -141,6 +141,23 @@ Item {
 	}
 }
 
+func TestWidgetDesktopFaceKit(t *testing.T) {
+	r, write := checkRepo(t)
+	// A widget's iRiS and Prism desktop faces take iRiS's desktop widget kit; the rest of iRiS stays its inside.
+	write(map[string]string{
+		"widgets/clock/hub.json":      `{"version": "1.0.1"}`,
+		"widgets/clock/IrisFace.qml":  "import QtQuick\nimport qs.modules.iris.widgets\nimport qs.modules.iris.widgets.prism\nItem {}\n",
+		"widgets/clock/PrismFace.qml": "import QtQuick\nimport qs.modules.iris.settings\nItem {}\n",
+	})
+	errs := checkOnly(r)
+	if has(errs, "imports qs.modules.iris.widgets") {
+		t.Errorf("a desktop face may take the desktop widget kit: %v", errs)
+	}
+	if !has(errs, "imports qs.modules.iris.settings") {
+		t.Errorf("iRiS's inside passed: %v", errs)
+	}
+}
+
 func TestCheckAddedLinesOnly(t *testing.T) {
 	r, write := checkRepo(t)
 	// What main already holds never fails a pull request: only the lines it adds are read.
