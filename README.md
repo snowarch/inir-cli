@@ -4,8 +4,9 @@ The `inir` command for the [iNiR](https://github.com/snowarch/iNiR) shell, as on
 
 It is the front door: what it knows it does itself, and every other command goes to the shell's `scripts/inir`.
 
-- **IPC calls** to a running shell (`inir <target> <function> [args]`), about three times
-  faster than through the bash launcher.
+- **IPC calls** to a running shell (`inir <target> <function> [args]`), about 2.5 times
+  faster than through the bash launcher (35 ms against 88 ms for `inir colorMode get`,
+  2026-11-14, Ryzen 7 5700G).
 - **Tab completion** for bash, zsh and fish (`inir completions install`). The scripts are
   small: on every Tab they ask `inir __complete`, which knows the launcher's commands and
   flags (`internal/cli`) and reads the installed shell's IPC surface, so they follow the
@@ -64,7 +65,8 @@ not do. Without the binary, or with `INIR_NO_CLI=1`, the launcher still runs the
 IPC; the hub and tab completion need the binary. The shell repo's
 `docs/adr/0006-cli-binary-behind-the-bash-launcher.md` has the whole design.
 
-It reads the shell's IPC surface from `scripts/lib/ipc.json`, which the shell repo generates.
+It reads the shell's IPC surface from the shell repo's `scripts/lib/ipc.json`, written from the `///`
+comment above each IPC handler.
 
 ## Tests
 
