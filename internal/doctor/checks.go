@@ -196,9 +196,14 @@ func (c *checker) dependencies(s *step) {
 				missing(cmd+" (rebuild)", cmd)
 			}
 		}
-		// Umbriel when setup built it (its record exists): again once iNiR pins a newer commit, or it stopped starting
+	}
+	// Umbriel where setup built it (its record exists): again once iNiR pins newer commits, or when it or its portal
+	// stopped starting
+	if c.e.OS == "aerynos" || c.e.OS == "void" {
 		if built, err := os.ReadFile(filepath.Join(c.e.DataHome, "inir", "providers", "umbriel")); err == nil && CompositorChoice(c.e.ConfDir) != "niri" {
-			if pin := umbrielPin(c.e.RepoRoot); (pin != "" && !strings.HasPrefix(string(built), pin+":")) || !homeBuildRuns("/usr/local/bin/umbriel") {
+			pin := umbrielPin(c.e.RepoRoot)
+			if (pin != "" && strings.TrimSpace(string(built)) != pin) || !homeBuildRuns("/usr/local/bin/umbriel") ||
+				!homeBuildRuns("/usr/local/libexec/xdg-desktop-portal-umbriel") {
 				missing("umbriel (rebuild)", "umbriel")
 			}
 		}
@@ -1404,15 +1409,20 @@ func homeBuildRuns(path string) bool {
 	return !strings.Contains(out, "not found")
 }
 
-// umbrielPin is UMBRIEL_COMMIT of sdata/dist-aerynos/providers.sh: the commit setup builds Umbriel at on AerynOS.
+// umbrielPin is the record a current Umbriel build leaves where setup builds it (AerynOS, Void): UMBRIEL_COMMIT and
+// UMBRIEL_PORTAL_COMMIT of sdata/lib/user-providers.sh, "umbriel:portal".
 func umbrielPin(repo string) string {
-	data, _ := os.ReadFile(filepath.Join(repo, "sdata", "dist-aerynos", "providers.sh"))
+	data, _ := os.ReadFile(filepath.Join(repo, "sdata", "lib", "user-providers.sh"))
+	pins := map[string]string{}
 	for _, l := range strings.Split(string(data), "\n") {
-		if v, ok := strings.CutPrefix(l, `UMBRIEL_COMMIT="`); ok {
-			return strings.TrimSuffix(v, `"`)
+		if k, v, ok := strings.Cut(l, `="`); ok && (k == "UMBRIEL_COMMIT" || k == "UMBRIEL_PORTAL_COMMIT") {
+			pins[k] = strings.TrimSuffix(v, `"`)
 		}
 	}
-	return ""
+	if pins["UMBRIEL_COMMIT"] == "" || pins["UMBRIEL_PORTAL_COMMIT"] == "" {
+		return ""
+	}
+	return pins["UMBRIEL_COMMIT"] + ":" + pins["UMBRIEL_PORTAL_COMMIT"]
 }
 
 func isELF(path string) bool {

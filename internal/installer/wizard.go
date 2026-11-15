@@ -165,7 +165,7 @@ func picks(t ui.Theme, s System, pk Packages, backupDir string, c *Choices) []*h
 		),
 	}
 	// With Umbriel absent and no way for setup to install it, there is nothing to pick: Review says why.
-	if c.askCompositor && (s.Umbriel || umbrielInstallable(s.OS)) {
+	if c.askCompositor && (s.Umbriel || umbrielInstallable(s.OS, s.Release)) {
 		where := huh.NewSelect[string]().Title("Where iNiR runs").Value(&c.Compositor)
 		if s.Umbriel {
 			where = where.Description("Umbriel is installed here too. Pick it at the login screen like Niri.").
@@ -174,8 +174,8 @@ func picks(t ui.Theme, s System, pk Packages, backupDir string, c *Choices) []*h
 					huh.NewOption("Niri only  "+faint(t, "Umbriel stays exactly as it is"), "niri"))
 		} else {
 			installs := "installs Umbriel now, with iNiR's setup and your Niri shortcuts"
-			if s.OS == "aerynos" {
-				installs = "builds Umbriel now (AerynOS doesn't package it, a few minutes), with iNiR's setup"
+			if umbrielBuilt(s.OS) {
+				installs = "builds Umbriel now (not packaged here, a few minutes), with iNiR's setup"
 			}
 			where = where.Description("Both are Wayland compositors; you pick one at the login screen.").
 				Options(
@@ -232,7 +232,7 @@ func Review(s System, pk Packages, c Choices) string {
 		line("Swaps %s for the stable Quickshell", strings.Join(s.Replace, ", "))
 	}
 	switch {
-	case c.Compositor == "both" && !s.Umbriel && s.OS == "aerynos":
+	case c.Compositor == "both" && !s.Umbriel && umbrielBuilt(s.OS):
 		line("Builds Umbriel from its source and sets iNiR up on it")
 	case c.Compositor == "both" && !s.Umbriel:
 		line("Installs Umbriel and sets iNiR up on it")
@@ -240,7 +240,7 @@ func Review(s System, pk Packages, c Choices) string {
 		line("Sets iNiR up on Umbriel too")
 	case c.Compositor == "niri" && s.Umbriel:
 		line("Leaves Umbriel as it is")
-	case !s.Umbriel && !umbrielInstallable(s.OS):
+	case !s.Umbriel && !umbrielInstallable(s.OS, s.Release):
 		line("Runs on Niri; install Umbriel from its guide and iNiR sets itself up there at your first login")
 	}
 	if s.Configs && c.Backup {

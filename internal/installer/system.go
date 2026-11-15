@@ -17,6 +17,7 @@ import (
 type System struct {
 	Name     string // PRETTY_NAME from os-release
 	OS       string // setup's OS_GROUP_ID: arch, fedora, debian...
+	Release  string // UBUNTU_CODENAME, else VERSION_CODENAME: resolute, trixie...
 	FirstRun bool   // no iNiR install has finished here yet
 	Configs  bool   // there are configs an install would overwrite (niri, fish, foot...)
 	SDDM     bool   // the login screen can take the pixel theme
@@ -35,7 +36,14 @@ var otherShells = []string{
 
 // Detect reads the machine the way setup install will see it.
 func Detect(confDir string) System {
-	s := System{OS: doctor.DetectOS(), Name: osName()}
+	rel := osRelease()
+	s := System{OS: doctor.DetectOS(), Name: rel["PRETTY_NAME"], Release: rel["UBUNTU_CODENAME"]}
+	if s.Name == "" {
+		s.Name = "Linux"
+	}
+	if s.Release == "" {
+		s.Release = rel["VERSION_CODENAME"]
+	}
 	_, err := os.Stat(filepath.Join(confDir, "installed_true"))
 	s.FirstRun = err != nil
 	cfg := os.Getenv("XDG_CONFIG_HOME")
@@ -61,27 +69,38 @@ func Detect(confDir string) System {
 }
 
 // umbrielInstallable is whether setup can install Umbriel itself here (compositor_install_umbriel_package: pacman
-// with the AUR, dnf with Terra, AerynOS by building it).
-func umbrielInstallable(osID string) bool {
-	return osID == "arch" || osID == "fedora" || osID == "aerynos"
+// with the AUR, dnf with Terra, Noctalia's APT repository for the releases it builds, AerynOS and Void by building it).
+func umbrielInstallable(osID, release string) bool {
+	switch osID {
+	case "arch", "fedora", "aerynos", "void":
+		return true
+	case "debian", "ubuntu":
+		return release == "trixie" || release == "resolute" || release == "stonking"
+	}
+	return false
 }
 
-func osName() string {
+// umbrielBuilt is where no repository packages Umbriel, so setup builds it (build_umbriel_source).
+func umbrielBuilt(osID string) bool { return osID == "aerynos" || osID == "void" }
+
+// osRelease is os-release's keys, unquoted.
+func osRelease() map[string]string {
+	keys := map[string]string{}
 	f, err := os.Open("/etc/os-release")
 	if err != nil {
 		// AerynOS keeps /etc stateless: its os-release may live only in /usr/lib
 		if f, err = os.Open("/usr/lib/os-release"); err != nil {
-			return "Linux"
+			return keys
 		}
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		if v, ok := strings.CutPrefix(sc.Text(), "PRETTY_NAME="); ok {
-			return strings.Trim(v, `"'`)
+		if k, v, ok := strings.Cut(sc.Text(), "="); ok {
+			keys[k] = strings.Trim(v, `"'`)
 		}
 	}
-	return "Linux"
+	return keys
 }
 
 // pacmanInstalled is the subset of names pacman has installed.

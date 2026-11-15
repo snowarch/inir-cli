@@ -220,14 +220,22 @@ func TestCompositorPickReachesSetup(t *testing.T) {
 			t.Errorf("umbriel=%v pick=%s: review lacks %q:\n%s", tc.umbriel, tc.pick, tc.want, r)
 		}
 	}
-	// AerynOS builds Umbriel; where setup can't install it nothing is asked and the review says why.
-	if r := Review(System{OS: "aerynos"}, Packages{}, Choices{Compositor: "both"}); !strings.Contains(r, "Builds Umbriel") {
-		t.Errorf("aerynos review lacks the Umbriel build:\n%s", r)
+	// AerynOS and Void build Umbriel; where setup can't install it nothing is asked and the review says why.
+	for _, id := range []string{"aerynos", "void"} {
+		if r := Review(System{OS: id}, Packages{}, Choices{Compositor: "both"}); !strings.Contains(r, "Builds Umbriel") {
+			t.Errorf("%s review lacks the Umbriel build:\n%s", id, r)
+		}
 	}
-	if r := Review(System{OS: "void"}, Packages{}, Choices{}); !strings.Contains(r, "Runs on Niri") {
-		t.Errorf("void review lacks why it runs on Niri:\n%s", r)
+	if r := Review(System{OS: "generic"}, Packages{}, Choices{}); !strings.Contains(r, "Runs on Niri") {
+		t.Errorf("generic review lacks why it runs on Niri:\n%s", r)
 	}
-	if !umbrielInstallable("arch") || !umbrielInstallable("fedora") || !umbrielInstallable("aerynos") || umbrielInstallable("void") {
-		t.Error("umbrielInstallable must follow compositor_install_umbriel_package: arch, fedora and aerynos")
+	for _, tc := range []struct {
+		os, release string
+		want        bool
+	}{{"arch", "", true}, {"fedora", "", true}, {"aerynos", "", true}, {"ubuntu", "resolute", true}, {"debian", "trixie", true},
+		{"void", "", true}, {"debian", "forky", false}, {"ubuntu", "questing", false}, {"generic", "", false}} {
+		if umbrielInstallable(tc.os, tc.release) != tc.want {
+			t.Errorf("umbrielInstallable(%s, %s) must be %v, as compositor_install_umbriel_package does", tc.os, tc.release, tc.want)
+		}
 	}
 }
