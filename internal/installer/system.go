@@ -60,9 +60,11 @@ func Detect(confDir string) System {
 	return s
 }
 
-// umbrielInstallable is whether setup can install Umbriel itself here
-// (compositor_install_umbriel_package: pacman with the AUR, dnf with Terra).
-func umbrielInstallable(osID string) bool { return osID == "arch" || osID == "fedora" }
+// umbrielInstallable is whether setup can install Umbriel itself here (compositor_install_umbriel_package: pacman
+// with the AUR, dnf with Terra, AerynOS by building it).
+func umbrielInstallable(osID string) bool {
+	return osID == "arch" || osID == "fedora" || osID == "aerynos"
+}
 
 func osName() string {
 	f, err := os.Open("/etc/os-release")

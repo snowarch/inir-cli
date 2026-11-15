@@ -196,6 +196,12 @@ func (c *checker) dependencies(s *step) {
 				missing(cmd+" (rebuild)", cmd)
 			}
 		}
+		// Umbriel when setup built it (its record exists): again once iNiR pins a newer commit, or it stopped starting
+		if built, err := os.ReadFile(filepath.Join(c.e.DataHome, "inir", "providers", "umbriel")); err == nil && CompositorChoice(c.e.ConfDir) != "niri" {
+			if pin := umbrielPin(c.e.RepoRoot); (pin != "" && !strings.HasPrefix(string(built), pin+":")) || !homeBuildRuns("/usr/local/bin/umbriel") {
+				missing("umbriel (rebuild)", "umbriel")
+			}
+		}
 	}
 	if c.e.OS == "void" {
 		webengine, layershell := false, false
@@ -1396,6 +1402,17 @@ func homeBuildRuns(path string) bool {
 	}
 	out, _ := run(5*time.Second, "ldd", path)
 	return !strings.Contains(out, "not found")
+}
+
+// umbrielPin is UMBRIEL_COMMIT of sdata/dist-aerynos/providers.sh: the commit setup builds Umbriel at on AerynOS.
+func umbrielPin(repo string) string {
+	data, _ := os.ReadFile(filepath.Join(repo, "sdata", "dist-aerynos", "providers.sh"))
+	for _, l := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(l, `UMBRIEL_COMMIT="`); ok {
+			return strings.TrimSuffix(v, `"`)
+		}
+	}
+	return ""
 }
 
 func isELF(path string) bool {

@@ -173,10 +173,14 @@ func picks(t ui.Theme, s System, pk Packages, backupDir string, c *Choices) []*h
 					huh.NewOption("Niri and Umbriel  "+faint(t, "Umbriel gets iNiR's keys, your Niri shortcuts and the shell"), "both"),
 					huh.NewOption("Niri only  "+faint(t, "Umbriel stays exactly as it is"), "niri"))
 		} else {
+			installs := "installs Umbriel now, with iNiR's setup and your Niri shortcuts"
+			if s.OS == "aerynos" {
+				installs = "builds Umbriel now (AerynOS doesn't package it, a few minutes), with iNiR's setup"
+			}
 			where = where.Description("Both are Wayland compositors; you pick one at the login screen.").
 				Options(
 					huh.NewOption("Niri  "+faint(t, "add Umbriel any time: iNiR sets itself up there on your first login"), ""),
-					huh.NewOption("Niri and Umbriel  "+faint(t, "installs Umbriel now, with iNiR's setup and your Niri shortcuts"), "both"))
+					huh.NewOption("Niri and Umbriel  "+faint(t, installs), "both"))
 		}
 		groups = append(groups, huh.NewGroup(where))
 	}
@@ -228,14 +232,14 @@ func Review(s System, pk Packages, c Choices) string {
 		line("Swaps %s for the stable Quickshell", strings.Join(s.Replace, ", "))
 	}
 	switch {
+	case c.Compositor == "both" && !s.Umbriel && s.OS == "aerynos":
+		line("Builds Umbriel from its source and sets iNiR up on it")
 	case c.Compositor == "both" && !s.Umbriel:
 		line("Installs Umbriel and sets iNiR up on it")
 	case c.Compositor == "both":
 		line("Sets iNiR up on Umbriel too")
 	case c.Compositor == "niri" && s.Umbriel:
 		line("Leaves Umbriel as it is")
-	case !s.Umbriel && s.OS == "aerynos":
-		line("Runs on Niri: AerynOS doesn't package Umbriel yet")
 	case !s.Umbriel && !umbrielInstallable(s.OS):
 		line("Runs on Niri; install Umbriel from its guide and iNiR sets itself up there at your first login")
 	}
