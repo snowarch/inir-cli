@@ -60,10 +60,17 @@ func Detect(confDir string) System {
 	return s
 }
 
+// umbrielInstallable is whether setup can install Umbriel itself here
+// (compositor_install_umbriel_package: pacman with the AUR, dnf with Terra).
+func umbrielInstallable(osID string) bool { return osID == "arch" || osID == "fedora" }
+
 func osName() string {
 	f, err := os.Open("/etc/os-release")
 	if err != nil {
-		return "Linux"
+		// AerynOS keeps /etc stateless: its os-release may live only in /usr/lib
+		if f, err = os.Open("/usr/lib/os-release"); err != nil {
+			return "Linux"
+		}
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)

@@ -220,4 +220,11 @@ func TestCompositorPickReachesSetup(t *testing.T) {
 			t.Errorf("umbriel=%v pick=%s: review lacks %q:\n%s", tc.umbriel, tc.pick, tc.want, r)
 		}
 	}
+	// Where setup can't install Umbriel nothing is asked and the review says why.
+	if r := Review(System{OS: "aerynos"}, Packages{}, Choices{}); !strings.Contains(r, "AerynOS doesn't package Umbriel") {
+		t.Errorf("aerynos review lacks why it runs on Niri:\n%s", r)
+	}
+	if !umbrielInstallable("arch") || !umbrielInstallable("fedora") || umbrielInstallable("aerynos") || umbrielInstallable("void") {
+		t.Error("umbrielInstallable must follow compositor_install_umbriel_package: arch and fedora only")
+	}
 }

@@ -164,7 +164,8 @@ func picks(t ui.Theme, s System, pk Packages, backupDir string, c *Choices) []*h
 				Value(&c.Extras),
 		),
 	}
-	if c.askCompositor {
+	// With Umbriel absent and no way for setup to install it, there is nothing to pick: Review says why.
+	if c.askCompositor && (s.Umbriel || umbrielInstallable(s.OS)) {
 		where := huh.NewSelect[string]().Title("Where iNiR runs").Value(&c.Compositor)
 		if s.Umbriel {
 			where = where.Description("Umbriel is installed here too. Pick it at the login screen like Niri.").
@@ -233,6 +234,10 @@ func Review(s System, pk Packages, c Choices) string {
 		line("Sets iNiR up on Umbriel too")
 	case c.Compositor == "niri" && s.Umbriel:
 		line("Leaves Umbriel as it is")
+	case !s.Umbriel && s.OS == "aerynos":
+		line("Runs on Niri: AerynOS doesn't package Umbriel yet")
+	case !s.Umbriel && !umbrielInstallable(s.OS):
+		line("Runs on Niri; install Umbriel from its guide and iNiR sets itself up there at your first login")
 	}
 	if s.Configs && c.Backup {
 		line("Backs up your configs, then writes iNiR's")
