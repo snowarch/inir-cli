@@ -268,6 +268,10 @@ func (c *checker) dependencies(s *step) {
 	if !anyFile(pluginDirs("platformthemes"), "KDEPlasmaPlatformTheme6.so") {
 		missing("plasma-integration", "plasma-integration")
 	}
+	// The platform theme opens KDE apps' Open With dialog through keditfiletype (the Qt theming step fails without it).
+	if lookPath("keditfiletype") == "" && lookPath("keditfiletype6") == "" {
+		missing("kde-cli-tools", "kde-cli-tools")
+	}
 	if lookPath("fc-list") != "" {
 		if out, _ := run(10*time.Second, "fc-list", ":", "family"); !strings.Contains(strings.ToLower(out), "noto color emoji") {
 			missing("Noto Color Emoji", "font-noto-color-emoji")
