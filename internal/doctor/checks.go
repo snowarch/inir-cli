@@ -318,7 +318,7 @@ type font struct{ pattern, display string }
 var (
 	criticalFonts  = []font{{"Material Symbols Rounded", "Material Symbols Rounded"}, {"JetBrainsMono Nerd", "JetBrainsMono Nerd Font"}}
 	importantFonts = []font{{"Roboto Flex", "Roboto Flex"}, {"Gabarito", "Gabarito"}, {"Oxanium", "Oxanium"}, {"Noto Color Emoji", "Noto Color Emoji"}}
-	optionalFonts  = []font{{"Rubik", "Rubik"}, {"Space Grotesk", "Space Grotesk"}, {"Readex Pro", "Readex Pro"}, {`Twemoji\|Twitter Color Emoji`, "Twemoji"}}
+	optionalFonts  = []font{{"Rubik", "Rubik"}, {"Space Grotesk", "Space Grotesk"}, {"Readex Pro", "Readex Pro"}}
 	// Fonts _try_install_font_package can fetch without an AUR helper.
 	downloadableFonts = map[string]bool{"Material Symbols Rounded": true, "JetBrainsMono Nerd Font": true,
 		"Roboto Flex": true, "Gabarito": true, "Oxanium": true}
