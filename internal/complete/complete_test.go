@@ -96,7 +96,7 @@ func TestComplete(t *testing.T) {
 		{line: "nosuch ", want: nil},
 		{line: "doctor -", want: []string{"--check", "--json", "--only"}},
 		{line: "deps ", want: []string{"plan"}},
-		{line: "deps plan --distro ", want: []string{"arch", "void"}},
+		{line: "deps plan --distro ", want: []string{"arch", "void", "aerynos"}},
 	}
 	for _, c := range cases {
 		words := strings.Split(c.line, " ")

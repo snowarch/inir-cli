@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -246,11 +247,17 @@ func (e *Env) installModeForSync() string {
 }
 
 // DetectOS is detect_distro's OS_GROUP_ID (sdata/lib/dist-determine.sh), in
-// the same order: arch, fedora, debian/ubuntu, opensuse, void, gentoo, nixos, alpine.
+// the same order: aerynos, arch, fedora, debian/ubuntu, opensuse, void, gentoo, nixos, alpine.
 func DetectOS() string {
+	// AerynOS keeps /etc stateless: its os-release may live only in /usr/lib
 	osRelease, _ := os.ReadFile("/etc/os-release")
+	if len(osRelease) == 0 {
+		osRelease, _ = os.ReadFile("/usr/lib/os-release")
+	}
 	rel := strings.ToLower(string(osRelease))
 	switch {
+	case regexp.MustCompile(`(?m)^id="?aerynos"?$`).MatchString(rel) || (lookPath("moss") != "" && exists("/.moss")):
+		return "aerynos"
 	case exists("/etc/arch-release") || lookPath("pacman") != "":
 		return "arch"
 	case exists("/etc/fedora-release") || strings.Contains(rel, "fedora"):

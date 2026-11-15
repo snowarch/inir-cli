@@ -111,3 +111,42 @@ func TestArchInstalledInOneQuery(t *testing.T) {
 		t.Errorf("all installed: %d queries, want just the one for what is installed", queries)
 	}
 }
+
+func TestAerynosReadsMossLists(t *testing.T) {
+	var ran []string
+	sys := System{
+		Query: func(name string, args ...string) (string, int) {
+			if name != "moss" || len(args) < 3 {
+				return "", 1
+			}
+			switch args[2] {
+			case "--installed":
+				return "\x1b[1mjq\x1b[0m        1.8.1-3 - Command-line JSON processor\n", 0
+			case "--available":
+				return "fish      4.2.0-1 - Friendly shell\njq        1.8.1-3 - Command-line JSON processor\n", 0
+			}
+			return "", 1
+		},
+		Run: func(name string, args ...string) error {
+			ran = append(ran, name+" "+strings.Join(args, " "))
+			return nil
+		},
+	}
+	m, err := ManagerFor("aerynos", sys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := m.Resolve(&Plan{Distro: "aerynos", Packages: []string{"jq", "fish", "nope"}}, nil)
+	if got := strings.Join(s.Install, " "); got != "fish" {
+		t.Errorf("install = %q, want what moss offers and is not installed", got)
+	}
+	if got := strings.Join(s.Unavailable, " "); got != "nope" {
+		t.Errorf("unavailable = %q", got)
+	}
+	if err := m.InstallPackages(s, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 1 || ran[0] != "sudo moss pkg add -y fish" {
+		t.Errorf("ran %q", ran)
+	}
+}

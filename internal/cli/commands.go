@@ -208,7 +208,7 @@ var BinaryCommands = []Command{
 	{Name: "deps", Desc: "What an install puts on this machine", Subs: []Sub{
 		{Name: "plan", Desc: "Packages and providers from the shell's deps.toml", Flags: []Flag{
 			{Name: "--distro", Desc: "Plan for another distro", Value: "DISTRO",
-				Values: []string{"arch", "fedora", "debian", "ubuntu", "void"}},
+				Values: []string{"arch", "fedora", "debian", "ubuntu", "void", "aerynos"}},
 			{Name: "--no-audio", Desc: "Without the audio group"},
 			{Name: "--no-toolkit", Desc: "Without the toolkit group"},
 			{Name: "--no-screencapture", Desc: "Without the screencapture group"},

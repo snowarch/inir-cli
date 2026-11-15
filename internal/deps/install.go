@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // System runs commands for an install; tests replace it.
@@ -166,6 +168,30 @@ func ManagerFor(distro string, sys System) (*Manager, error) {
 				args = append(args, "-y")
 			}
 			return sys.Run("sudo", append(args, pkgs...)...)
+		}
+	case "aerynos":
+		// moss pkg list prints "name  version-release - summary" a line, coloured on a terminal.
+		list := func(flag string) (map[string]bool, bool) {
+			out, code := sys.Query("moss", "pkg", "list", flag)
+			if code != 0 {
+				return nil, false
+			}
+			set := map[string]bool{}
+			for _, line := range strings.Split(ansi.Strip(out), "\n") {
+				if f := strings.Fields(line); len(f) >= 2 {
+					set[f[0]] = true
+				}
+			}
+			return set, true
+		}
+		m.installedAll = func([]string) (map[string]bool, bool) { return list("--installed") }
+		m.installed = func(p string) bool { set, _ := list("--installed"); return set[p] }
+		m.availableAll = func() (map[string]bool, bool) { return list("--available") }
+		m.available = func(p string) bool { set, _ := list("--available"); return set[p] }
+		m.refresh = func(bool) error { return sys.Run("sudo", "moss", "repo", "update") }
+		m.install = func(pkgs []string, yes bool) error {
+			// pkg add records them in the system-model, so the next moss sync keeps them
+			return sys.Run("sudo", append(yesFlag([]string{"moss", "pkg", "add"}, yes, "-y"), pkgs...)...)
 		}
 	default:
 		return nil, fmt.Errorf("no package manager for %q", distro)

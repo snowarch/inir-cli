@@ -20,7 +20,7 @@ const SchemaVersion = 1
 var Groups = []string{"audio", "toolkit", "screencapture", "fonts"}
 
 // Distros the table has keys for; ubuntu falls back to debian.
-var Distros = []string{"arch", "fedora", "debian", "ubuntu", "void"}
+var Distros = []string{"arch", "fedora", "debian", "ubuntu", "void", "aerynos"}
 
 type Table struct {
 	Schema int   `toml:"schema"`
@@ -28,14 +28,15 @@ type Table struct {
 }
 
 type Dep struct {
-	Name   string   `toml:"name"`
-	Group  string   `toml:"group"`
-	Groups []string `toml:"groups"`
-	Arch   any      `toml:"arch"`
-	Fedora any      `toml:"fedora"`
-	Debian any      `toml:"debian"`
-	Ubuntu any      `toml:"ubuntu"`
-	Void   any      `toml:"void"`
+	Name    string   `toml:"name"`
+	Group   string   `toml:"group"`
+	Groups  []string `toml:"groups"`
+	Arch    any      `toml:"arch"`
+	Fedora  any      `toml:"fedora"`
+	Debian  any      `toml:"debian"`
+	Ubuntu  any      `toml:"ubuntu"`
+	Void    any      `toml:"void"`
+	Aerynos any      `toml:"aerynos"`
 }
 
 // Spec is one distro's way to provide a dep.
@@ -132,6 +133,8 @@ func (d *Dep) raw(distro string) any {
 		return d.Debian
 	case "void":
 		return d.Void
+	case "aerynos":
+		return d.Aerynos
 	}
 	return nil
 }

@@ -183,9 +183,18 @@ func (c *checker) dependencies(s *step) {
 	}
 	// the profile buttons' daemon where nothing manages power yet; Void lists it above
 	switch c.e.OS {
-	case "arch", "fedora", "debian", "ubuntu":
+	case "arch", "fedora", "debian", "ubuntu", "aerynos":
 		if powerProfilesWanted() {
 			missing("power-profiles-daemon", "power-profiles")
+		}
+	}
+	// AerynOS: what setup built into the home links against a /usr that moss replaces whole; a library that moved
+	// leaves the command there but unable to start, so it is missing too
+	if c.e.OS == "aerynos" {
+		for _, cmd := range []string{"hyprpicker", "swappy", "songrec", "blueman-manager"} {
+			if path := lookPath(cmd); strings.HasPrefix(path, c.e.Home+"/") && !homeBuildRuns(path) {
+				missing(cmd+" (rebuild)", cmd)
+			}
 		}
 	}
 	if c.e.OS == "void" {
@@ -280,7 +289,7 @@ func (c *checker) dependencies(s *step) {
 	s.missing = ids
 	text := "Missing: " + strings.Join(names, " ")
 	switch c.e.OS {
-	case "arch", "fedora", "debian", "ubuntu", "void":
+	case "arch", "fedora", "debian", "ubuntu", "void", "aerynos":
 		s.fixable(text, "All dependencies available")
 	default:
 		s.fail(text)
@@ -294,6 +303,8 @@ func (c *checker) dependencies(s *step) {
 		s.hint("Run: sudo apt install ... (see ./setup install)")
 	case "void":
 		s.hint("Run: ./setup install (repairs the matching XBPS providers)")
+	case "aerynos":
+		s.hint("Run: ./setup install (installs the matching moss packages)")
 	default:
 		s.hint("Install these tools using your package manager")
 		s.info("Automatic install not available for " + c.e.OS + ". Install manually.")
@@ -1347,6 +1358,10 @@ func pluginDirs(sub string) []string {
 	for _, p := range nixProfiles() {
 		dirs = append(dirs, filepath.Join(p, "lib", "qt-6", "plugins", sub))
 	}
+	// where setup builds Darkly when /usr belongs to the package manager (AerynOS)
+	if home := os.Getenv("HOME"); home != "" {
+		dirs = append(dirs, filepath.Join(home, ".local", "lib", "qt6", "plugins", sub))
+	}
 	for _, d := range []string{"/usr/lib/qt6/plugins", "/usr/lib64/qt6/plugins", "/usr/lib/x86_64-linux-gnu/qt6/plugins"} {
 		dirs = append(dirs, filepath.Join(d, sub))
 	}
@@ -1362,6 +1377,36 @@ func nixProfiles() []string {
 		"/run/current-system/sw",
 		"/nix/var/nix/profiles/default",
 	}
+}
+
+// homeBuildRuns is home_build_runs (sdata/lib/user-providers.sh): a program setup built into the home still finds
+// every library it links, and a Python one finds its package for the Python there is now.
+func homeBuildRuns(path string) bool {
+	if !isELF(path) {
+		py, err := filepath.EvalSymlinks("/usr/bin/python3")
+		if err != nil {
+			return true
+		}
+		site := filepath.Join(os.Getenv("HOME"), ".local", "lib", filepath.Base(py), "site-packages")
+		mods, _ := filepath.Glob(filepath.Join(site, "_"+strings.TrimSuffix(filepath.Base(path), "-manager")+"*.so"))
+		if len(mods) == 0 {
+			return false
+		}
+		path = mods[0]
+	}
+	out, _ := run(5*time.Second, "ldd", path)
+	return !strings.Contains(out, "not found")
+}
+
+func isELF(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	magic := make([]byte, 4)
+	n, _ := f.Read(magic)
+	return n == 4 && string(magic) == "\x7fELF"
 }
 
 func anyFile(dirs []string, name string) bool {
@@ -1386,6 +1431,8 @@ func (c *checker) qtTheming(s *step) {
 			s.hint("Run: sudo apt install plasma-integration")
 		case "void":
 			s.hint("Run: ./setup install (repairs the managed Void provider)")
+		case "aerynos":
+			s.hint("Run: sudo moss pkg add plasma-integration")
 		default:
 			s.hint("Install plasma-integration using your package manager")
 		}
@@ -1409,8 +1456,8 @@ func (c *checker) qtTheming(s *step) {
 		switch c.e.OS {
 		case "arch":
 			s.hint("Run: yay -S darkly-bin")
-		case "void":
-			s.hint("Run: ./setup install (repairs the pinned Void Darkly provider)")
+		case "void", "aerynos":
+			s.hint("Run: ./setup install (repairs the pinned Darkly provider)")
 		default:
 			s.hint("Install darkly from: https://github.com/AlessioC31/darkly")
 		}
@@ -1433,6 +1480,8 @@ func (c *checker) qtTheming(s *step) {
 				s.hint("Run: sudo zypper install kde-cli-tools6")
 			case "void":
 				s.hint("Run: sudo xbps-install -S kde-cli-tools")
+			case "aerynos":
+				s.hint("Run: sudo moss pkg add kde-cli-tools")
 			default:
 				s.hint("Install kde-cli-tools using your package manager")
 			}
