@@ -352,19 +352,6 @@ func TestCheckReach(t *testing.T) {
 			t.Errorf("flagged %q: %v", not, errs)
 		}
 	}
-
-	// From outside, a pull request reads whole: past 2500 lines of code it is sent in steps. A maintainer's is not held.
-	for _, maintainer := range []bool{false, true} {
-		r, write = checkRepo(t)
-		files := map[string]string{"components/huge/hub.json": `{"version": "1.0.0"}`}
-		for i := 0; i < 6; i++ {
-			files[fmt.Sprintf("components/huge/Part%d.qml", i)] = "import QtQuick\nItem {\n" + big(450, fmt.Sprintf("    property int p%d_%%d: 1\n", i)) + "}\n"
-		}
-		write(files)
-		if got := has(checkAs(r, maintainer), "lines of code in one pull request"); got == maintainer {
-			t.Errorf("maintainer %v: size rule held %v", maintainer, got)
-		}
-	}
 }
 
 // A Design is values over its family's components: design.json against the family's schema, three parts at most, no

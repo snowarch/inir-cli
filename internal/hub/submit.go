@@ -23,7 +23,7 @@ func (r *Repo) Submit(dir string, dryRun bool, say func(string)) error {
 	r.contracts(abs)
 	if since := r.git("merge-base", "origin/main", "HEAD"); since != "" {
 		r.bumped("origin/main", r.rel(abs))
-		r.itemRules(since, r.rel(abs), false)
+		r.itemRules(since, r.rel(abs))
 	}
 	if len(r.Errors) > 0 {
 		return fail(ExitError, "%d error(s): fix them before submitting", len(r.Errors))

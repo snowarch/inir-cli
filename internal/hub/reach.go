@@ -15,11 +15,9 @@ import (
 // pull requests that passed every other check and still reached into the rest of the shell (11-04: two corners of
 // 11k and 7k lines, carrying copies of iRiS's own files, importing its insides and writing its state).
 
-// A pull request from outside adds at most this many lines of code; one file holds at most fileMax lines.
-const (
-	pullMax = 2500
-	fileMax = 600
-)
+// One file holds at most fileMax lines. A pull request's size is not capped: a plugin is as big as its job, and the
+// reviewer hands one too big to read whole to a maintainer instead of merging it (inir-hub merge.yml).
+const fileMax = 600
 
 // codeExts are the files a reviewer reads as code. Translations, docs, images and data are not counted.
 var codeExts = []string{".qml", ".js", ".mjs", ".py", ".sh", ".bash", ".fish", ".go", ".rs", ".lua", ".ts"}
@@ -83,15 +81,12 @@ func (r *Repo) addedByFile(since, item string) map[string][]int {
 	return added
 }
 
-// size: what a reviewer can read whole. A big item lands as the smallest version that works, then each addition on
-// its own pull request; a file does one job.
-func (r *Repo) size(added map[string][]int, item string, maintainer bool) {
-	total := 0
+// size: a file does one job, so each can be read, reviewed and fixed on its own.
+func (r *Repo) size(added map[string][]int) {
 	for _, rel := range sortedKeysInt(added) {
 		if !isCode(rel) {
 			continue
 		}
-		total += len(added[rel])
 		b, err := os.ReadFile(filepath.Join(r.Root, rel))
 		if err != nil {
 			continue
@@ -99,9 +94,6 @@ func (r *Repo) size(added map[string][]int, item string, maintainer bool) {
 		if n := strings.Count(string(b), "\n"); n > fileMax {
 			r.errorf(filepath.Join(r.Root, rel), "%d lines in one file (at most %d): split it by job (its state, each page, each part) so each file can be read, reviewed and fixed on its own", n, fileMax)
 		}
-	}
-	if !maintainer && total > pullMax {
-		r.errorf(filepath.Join(r.Root, item), "%d lines of code in one pull request (at most %d, translations and docs not counted): nobody can review that whole, and what nobody read reaches every desktop that installs it. Send the smallest version that works first (one page, one source), then each addition on its own pull request that raises the version", total, pullMax)
 	}
 }
 

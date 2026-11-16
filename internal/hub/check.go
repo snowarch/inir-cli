@@ -20,8 +20,7 @@ import (
 //   - the lines it adds draw with the family's tokens: no hex or numeric colours, no fixed font sizes, no
 //     Qt5Compat effects, and in a file that draws with IrisStyle no alpha of its own;
 //   - outside a family, it stays in its lane (reach.go): no file over 600 lines, no copy of another file of the hub,
-//     imports only what a family offers items, never starts the shell's binary, and from outside at most 2500 lines
-//     of code per pull request.
+//     imports only what a family offers items, and never starts the shell's binary.
 //
 // Rules about lines look only at what the branch adds, so code already in the hub never fails someone else's pull
 // request. Every failure says what to do instead.
@@ -89,17 +88,17 @@ func (r *Repo) Check(base string, maintainer bool) []*entry {
 	entries := r.Validate([]string{folder})
 	r.bumped(base, item)
 	r.contracts(folder)
-	r.itemRules(since, item, maintainer)
+	r.itemRules(since, item)
 	return entries
 }
 
 // itemRules: what the item's own files and the lines the branch adds keep (Check and Submit alike).
-func (r *Repo) itemRules(since, item string, maintainer bool) {
+func (r *Repo) itemRules(since, item string) {
 	kindDir := strings.Split(item, "/")[0]
 	added := r.addedByFile(since, item)
 	if kindDir != "families" {
 		r.ownLane(filepath.Join(r.Root, item), filepath.Base(item))
-		r.size(added, item, maintainer)
+		r.size(added)
 		r.copies(added, item)
 		if kindDir == "components" || kindDir == "widgets" || kindDir == "designs" {
 			r.reach(added, kindDir)
