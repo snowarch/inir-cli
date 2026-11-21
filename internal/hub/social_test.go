@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -137,6 +138,54 @@ func TestCountsLeaveOutOwn(t *testing.T) {
 	Relays = []string{"ws://127.0.0.1:1"}
 	if c, err := e.Counts(context.Background(), 0); err != nil || !c.Stale || c.Items["clock"].Up != 1 {
 		t.Errorf("with no relay the last read, stale: %+v %v", c, err)
+	}
+}
+
+// A relay gives at most its cap per REQ, newest first: fetch pages back with until and counts every key.
+func TestFetchPagesPastTheRelayCap(t *testing.T) {
+	var events []*Event
+	for i := range 7 {
+		key, _ := btcec.NewPrivateKey()
+		// two share a second across a page boundary
+		at := int64(100 + i)
+		if i == 3 {
+			at = 102
+		}
+		ev, _ := sign(key, `{"v":1,"items":{"clock":{"installed":true}}}`, time.Unix(at, 0))
+		events = append(events, ev)
+	}
+	sort.Slice(events, func(i, j int) bool { return events[i].CreatedAt > events[j].CreatedAt })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		for {
+			_, b, err := c.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var msg []json.RawMessage
+			json.Unmarshal(b, &msg)
+			var filter struct{ Until *int64 }
+			json.Unmarshal(msg[2], &filter)
+			sent := 0
+			for _, ev := range events {
+				if sent < 3 && (filter.Until == nil || ev.CreatedAt <= *filter.Until) {
+					c.Write(r.Context(), websocket.MessageText, marshal([]any{"EVENT", "count", ev}))
+					sent++
+				}
+			}
+			c.Write(r.Context(), websocket.MessageText, marshal([]any{"EOSE", "count"}))
+		}
+	}))
+	defer srv.Close()
+	got, answered := fetch(context.Background(), []string{"ws" + strings.TrimPrefix(srv.URL, "http")})
+	stats := map[string]Stats{"clock": {}}
+	fold(got, stats, false)
+	if answered != 1 || len(got) != 7 || stats["clock"].Installs != 7 {
+		t.Errorf("answered %d, keys %d, installs %d: want 1, 7, 7", answered, len(got), stats["clock"].Installs)
 	}
 }
 

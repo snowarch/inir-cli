@@ -319,15 +319,17 @@ func publish(ctx context.Context, ev *Event, relays []string) int {
 	return ok
 }
 
-// fetch reads every inir-hub state from the relays and keeps the newest valid one per key.
+// fetch reads every inir-hub state from the relays and keeps the newest valid one per key. A relay answers one
+// REQ with at most its own cap of events, newest first (500 on nos.lol, relay.primal.net and nostr.mom): read once,
+// 1120 people counted as the union of each relay's newest 500, a number that moved with which relays answered. So
+// each relay is read page by page, every page ending where the one before ended, until a page brings nothing new.
 func fetch(ctx context.Context, relays []string) (map[string]*Event, int) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	newest, answered := map[string]*Event{}, 0
-	filter := map[string]any{"kinds": []int{socialKind}, "#d": []string{socialTag}}
 	for _, url := range relays {
 		wg.Go(func() {
-			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
 			c, _, err := websocket.Dial(ctx, url, nil)
 			if err != nil {
@@ -335,40 +337,71 @@ func fetch(ctx context.Context, relays []string) (map[string]*Event, int) {
 			}
 			defer c.CloseNow()
 			c.SetReadLimit(4 << 20)
-			if c.Write(ctx, websocket.MessageText, marshal([]any{"REQ", "count", filter})) != nil {
-				return
-			}
-			for {
-				_, b, err := c.Read(ctx)
-				if err != nil {
+			seen := map[string]bool{}
+			var until int64 // 0: the first page, from the newest
+			for page := 0; page < maxPages; page++ {
+				filter := map[string]any{"kinds": []int{socialKind}, "#d": []string{socialTag}}
+				if page > 0 {
+					filter["until"] = until // inclusive: events that share the last page's oldest second come again, seen
+				}
+				// the same subscription id: a new REQ replaces the one before (NIP-01)
+				if c.Write(ctx, websocket.MessageText, marshal([]any{"REQ", "count", filter})) != nil {
 					return
 				}
-				var msg []json.RawMessage
-				var kind string
-				if json.Unmarshal(b, &msg) != nil || len(msg) < 2 || json.Unmarshal(msg[0], &kind) != nil {
-					continue
+				fresh, oldest, done := 0, until, false
+				for !done {
+					_, b, err := c.Read(ctx)
+					if err != nil {
+						return
+					}
+					var msg []json.RawMessage
+					var kind string
+					if json.Unmarshal(b, &msg) != nil || len(msg) < 2 || json.Unmarshal(msg[0], &kind) != nil {
+						continue
+					}
+					if kind == "EOSE" {
+						done = true
+						continue
+					}
+					var ev Event
+					if kind != "EVENT" || len(msg) < 3 || json.Unmarshal(msg[2], &ev) != nil {
+						continue
+					}
+					if oldest == 0 || ev.CreatedAt < oldest {
+						oldest = ev.CreatedAt
+					}
+					if seen[ev.ID] {
+						continue
+					}
+					seen[ev.ID] = true
+					fresh++
+					if !ev.verify() {
+						continue
+					}
+					mu.Lock()
+					if old := newest[ev.PubKey]; old == nil || ev.CreatedAt > old.CreatedAt {
+						newest[ev.PubKey] = &ev
+					}
+					mu.Unlock()
 				}
-				if kind == "EOSE" {
+				if page == 0 {
 					mu.Lock()
 					answered++
 					mu.Unlock()
+				}
+				if fresh == 0 {
 					return
 				}
-				var ev Event
-				if kind != "EVENT" || len(msg) < 3 || json.Unmarshal(msg[2], &ev) != nil || !ev.verify() {
-					continue
-				}
-				mu.Lock()
-				if old := newest[ev.PubKey]; old == nil || ev.CreatedAt > old.CreatedAt {
-					newest[ev.PubKey] = &ev
-				}
-				mu.Unlock()
+				until = oldest
 			}
 		})
 	}
 	wg.Wait()
 	return newest, answered
 }
+
+// maxPages bounds one relay's read: 200 pages of 500 are 100 000 people.
+const maxPages = 200
 
 // fold counts each person's newest state into the items' stats: the items already in stats, or every item when
 // open (a live count, which has no catalogue to hold it to).
