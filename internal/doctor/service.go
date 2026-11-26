@@ -261,7 +261,10 @@ func compositorUnits(confDir string) []string {
 	if CompositorChoice(confDir) == "niri" {
 		units = units[:1]
 	}
-	for _, unit := range []string{"niri.service", "umbriel.service"} {
+	if _, code := run(5*time.Second, "systemctl", "--user", "cat", "rin-session.target"); code == 0 {
+		units = append(units, "rin-session.target")
+	}
+	for _, unit := range []string{"niri.service", "umbriel.service", "rin-session.target"} {
 		if _, code := run(5*time.Second, "systemctl", "--user", "cat", unit); code == 0 {
 			return units
 		}
