@@ -87,6 +87,10 @@ func main() {
 			if len(args) > 1 && args[1] == "update" && installer.Interactive(args[2:]) {
 				os.Exit(installer.Update(args[2:]))
 			}
+		case "settings-window", "waffle-settings-window", "welcome", "kill-dialog":
+			if code, handled := runWindow(args[0], args[1:]); handled {
+				os.Exit(code)
+			}
 		case "cli":
 			if len(args) == 2 && args[1] == "version" {
 				fmt.Println("inir-cli", buildinfo.String())

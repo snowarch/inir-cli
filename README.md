@@ -7,6 +7,9 @@ It is the front door: what it knows it does itself, and every other command goes
 - **IPC calls** to a running shell (`inir <target> <function> [args]`), about 2.5 times
   faster than through the bash launcher (35 ms against 88 ms for `inir colorMode get`,
   2026-11-14, Ryzen 7 5700G).
+- **The shell's windows**: `inir settings-window [--toggle]`, `inir welcome` and `inir kill-dialog` start
+  on the running shell's own runtime and environment, with no bash in between (a toggle closes Settings in
+  160 ms, 270 ms through the launcher); with no shell running the launcher starts them.
 - **Tab completion** for bash, zsh and fish (`inir completions install`). The scripts are
   small: on every Tab they ask `inir __complete`, which knows the launcher's commands and
   flags (`internal/cli`) and reads the installed shell's IPC surface, so they follow the

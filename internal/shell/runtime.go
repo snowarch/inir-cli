@@ -24,21 +24,28 @@ func RunningExe() (string, bool) {
 		if _, err := os.Stat(filepath.Join(run, "by-shell", "inir", filepath.Base(target))); err != nil {
 			continue
 		}
-		pid := filepath.Base(link)
-		comm, err := os.ReadFile(filepath.Join("/proc", pid, "comm"))
-		// inir's launcher runs it through an inir-shell link (ananicy's `qs` rule nices it).
-		if name := strings.TrimSpace(string(comm)); err != nil || (name != "qs" && name != "inir-shell") {
-			continue
-		}
-		exe, err := os.Readlink(filepath.Join("/proc", pid, "exe"))
-		if err != nil {
-			continue
-		}
-		// A binary replaced on disk while running: the new one at that path.
-		exe = strings.TrimSuffix(exe, " (deleted)")
-		if st, err := os.Stat(exe); err == nil && st.Mode()&0o111 != 0 {
+		if exe, ok := Exe(filepath.Base(link)); ok {
 			return exe, true
 		}
+	}
+	return "", false
+}
+
+// Exe is the executable of a live qs process: the runtime a shell or one of its windows runs on.
+func Exe(pid string) (string, bool) {
+	comm, err := os.ReadFile(filepath.Join("/proc", pid, "comm"))
+	// inir's launcher runs it through an inir-shell link (ananicy's `qs` rule nices it).
+	if name := strings.TrimSpace(string(comm)); err != nil || (name != "qs" && name != "inir-shell") {
+		return "", false
+	}
+	exe, err := os.Readlink(filepath.Join("/proc", pid, "exe"))
+	if err != nil {
+		return "", false
+	}
+	// A binary replaced on disk while running: the new one at that path.
+	exe = strings.TrimSuffix(exe, " (deleted)")
+	if st, err := os.Stat(exe); err == nil && st.Mode()&0o111 != 0 {
+		return exe, true
 	}
 	return "", false
 }
