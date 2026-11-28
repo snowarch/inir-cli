@@ -91,6 +91,14 @@ func main() {
 			if code, handled := runWindow(args[0], args[1:]); handled {
 				os.Exit(code)
 			}
+		case "ipc":
+			// `inir ipc TARGET FUNCTION ARGS` names a target outright, so a command of the same name
+			// (settings, hub) does not shadow it; the shell's own calls take this form.
+			if len(args) >= 3 && !strings.HasPrefix(args[1], "-") {
+				if code, handled := callTarget(args[1:]); handled {
+					os.Exit(code)
+				}
+			}
 		case "cli":
 			if len(args) == 2 && args[1] == "version" {
 				fmt.Println("inir-cli", buildinfo.String())
@@ -114,7 +122,16 @@ func callIPC(args []string) (int, bool) {
 	if len(args) < 2 || strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[1], "-") {
 		return 0, false
 	}
-	if _, ok := cli.Lookup(args[0]); ok || (args[0] == "lock" && args[1] == "prepareSleep") {
+	if _, ok := cli.Lookup(args[0]); ok {
+		return 0, false
+	}
+	return callTarget(args)
+}
+
+// callTarget makes `TARGET FUNCTION ARGS` an IPC call on the running shell when the shell
+// declares both; anything else goes to the launcher.
+func callTarget(args []string) (int, bool) {
+	if args[0] == "lock" && args[1] == "prepareSleep" {
 		return 0, false
 	}
 	dir, ok := runningShell()

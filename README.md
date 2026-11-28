@@ -61,12 +61,12 @@ iNiR is a few pieces, each with one job: [iNiR](https://github.com/snowarch/iNiR
 shell runs in the background; this is the command you type; [inir-hub](https://github.com/snowarch/inir-hub) holds
 the families, themes and widgets you install, served at [inir.space/hub](https://inir.space/hub).
 
-The binary goes next to the bash launcher, not in place of it: `scripts/inir` looks for it at
-`$INIR_CLI`, `~/.local/share/inir/cli/inir`, `/usr/local/lib/inir/inir` and
-`/usr/lib/inir/inir`, execs it, and the binary execs the same launcher back for what it does
-not do. Without the binary, or with `INIR_NO_CLI=1`, the launcher still runs the shell and its
-IPC; the hub and tab completion need the binary. The shell repo's
-`docs/adr/0006-cli-binary-behind-the-bash-launcher.md` has the whole design.
+iNiR requires the binary: setup fails without it, and the shell runs it directly (`Directories.inir`).
+`scripts/inir` looks for it at `$INIR_CLI`, `~/.local/share/inir/cli/inir`, `/usr/local/lib/inir/inir` and
+`/usr/lib/inir/inir` and execs it; the binary execs the shell's launcher back (`INIR_BASH_LAUNCHER`) for what is
+not ported yet. `inir ipc TARGET FUNCTION ARGS` is an IPC call that no command name shadows. The shell repo's
+`docs/adr/0006-cli-binary-behind-the-bash-launcher.md` and `docs/adr/0007-the-inir-binary-is-required.md` have
+the design.
 
 It reads the shell's IPC surface from the shell repo's `scripts/lib/ipc.json`, written from the `///`
 comment above each IPC handler.
