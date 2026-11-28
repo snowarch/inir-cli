@@ -62,6 +62,9 @@ func main() {
 			if argv, title, ok := activityArgs(args[1:]); ok {
 				os.Exit(runActivity(argv, title))
 			}
+			if code, handled := runSession(args[1:]); handled {
+				os.Exit(code)
+			}
 		case "hook":
 			os.Exit(runHook(args[1:]))
 		case "__hook":
@@ -90,6 +93,10 @@ func main() {
 		case "settings-window", "waffle-settings-window", "welcome", "kill-dialog":
 			if code, handled := runWindow(args[0], args[1:]); handled {
 				os.Exit(code)
+			}
+		case "cleanup-orphans":
+			if len(args) == 1 {
+				os.Exit(runCleanupOrphans())
 			}
 		case "ipc":
 			// `inir ipc TARGET FUNCTION ARGS` names a target outright, so a command of the same name
